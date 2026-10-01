@@ -3,10 +3,11 @@ import type { FloorPlan, Organization, Property, Room, RoomMedia, RoomPolygon, S
 
 function checked<T>(data: T | null, error: { message: string } | null): T { if (error) throw new Error(error.message); if (data === null) throw new Error('No data returned'); return data }
 export async function listOrganizations(): Promise<Organization[]> { const { data, error } = await supabase.from('organizations').select('*').order('created_at'); return checked(data, error) as Organization[] }
-export async function createOrganization(name: string): Promise<Organization> {
+export async function createOrganization(name: string): Promise<void> {
   const slug = `${name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)}-${crypto.randomUUID().slice(0, 8)}`
-  const { data, error } = await supabase.from('organizations').insert({ name, slug }).select('*').single()
-  return checked(data, error) as Organization
+  // Owner membership is added by an AFTER INSERT trigger, so this insert cannot return the row under the read policy.
+  const { error } = await supabase.from('organizations').insert({ name, slug })
+  if (error) throw error
 }
 export async function updateOrganization(id: string, patch: Partial<Pick<Organization, 'name' | 'website' | 'logo_path'>>): Promise<void> { const { error } = await supabase.from('organizations').update(patch).eq('id', id); if (error) throw error }
 export async function listProperties(orgId: string): Promise<Property[]> { const { data, error } = await supabase.from('properties').select('*').eq('organization_id', orgId).order('updated_at', { ascending: false }); return checked(data, error) as Property[] }
