@@ -37,6 +37,8 @@ Sign up, create an organization, create a property, and open its Floor Plan Edit
 
 Uploads are limited to 15 MB and accepted image MIME types in both the client and private Supabase buckets. Paths begin with the organization UUID. Storage policies restrict access to organization members. The public viewer gets only a published property's necessary data and short-lived signed media URLs from `public-tour`; it has no direct anonymous table or bucket access. `tour_views` stores a minimal view count without visitor identifiers.
 
+Room photos are uploaded as the selected files and displayed from those originals; the app does not create a higher-resolution version. Use the full-resolution photo, ideally at least 1600 × 1200 pixels, rather than a downloaded thumbnail. The editor labels low-resolution existing photos and warns before uploading new ones below 1200 × 900 pixels. To improve an existing tour, upload the original photo to its room and remove the small copy.
+
 ## Checks
 
 Run `npm run typecheck`, `npm run lint`, and `npm run build`. Then verify in a configured Supabase project:
