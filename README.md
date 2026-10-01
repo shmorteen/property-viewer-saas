@@ -4,22 +4,26 @@ An interactive property tour SaaS for estate agencies. Teams create properties, 
 
 ## Prerequisites
 
-- Node.js 20.19+ or 22.12+ and npm
+- Node.js 20.19+ or 22.13+ and npm
 - A Supabase project (or the Supabase CLI and Docker for a local project)
 - A Stripe account in test mode for billing verification
 
-## Local setup
+## Local setup with a hosted Supabase project
+
+Run commands from this repository's **outer** `property-viewer-saas` directory, the one containing this README and `supabase/`. A second Vite starter was generated inside this checkout and moved to `.local-backups/` to prevent accidentally running it.
 
 1. Run `npm install`.
-2. Copy `.env.example` to `.env.local` and set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_APP_URL=http://localhost:5173`. Use the project's publishable/anon key; never put the service role key or Stripe secret in a `VITE_` variable.
-3. Apply `supabase/migrations/20261001000000_initial.sql` with the Supabase SQL editor, or install the Supabase CLI and run `supabase link --project-ref YOUR_PROJECT_REF` followed by `supabase db push`.
-4. Optionally run `supabase/seed.sql` in the SQL editor. It creates a public sample at `/tour/the-willow-residence`, with demo SVG assets bundled in `public/demo/`. The demo organization has no dashboard members.
-5. In Supabase Authentication → URL Configuration, set Site URL to `http://localhost:5173` and add `http://localhost:5173/**` as a redirect URL. Enable Email provider. For local tests, either confirm email from the inbox or disable email confirmation in the test project.
-6. Set function secrets with `supabase secrets set APP_URL=http://localhost:5173 STRIPE_SECRET_KEY=sk_test_... STRIPE_PRO_PRICE_ID=price_... STRIPE_WEBHOOK_SECRET=whsec_...`. Supabase supplies `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to hosted functions. Do not commit secrets.
-7. Deploy the functions with `supabase functions deploy public-tour`, `supabase functions deploy create-checkout`, `supabase functions deploy customer-portal`, and `supabase functions deploy stripe-webhook`. The included `supabase/config.toml` disables gateway JWT checks; the two billing functions validate the bearer token and owner membership themselves. `public-tour` only serves published tours, and `stripe-webhook` verifies Stripe signatures.
-8. Run `npm run dev` and open `http://localhost:5173`.
+2. Copy `.env.example` to `.env.local`. Set `VITE_SUPABASE_URL` to the **Project URL** from Supabase's Connect panel, `VITE_SUPABASE_ANON_KEY` to its **publishable key** (the variable name is retained for compatibility), and `VITE_APP_URL=http://localhost:5173`. Do not use the Postgres connection string or a secret/service-role key in the frontend. Restart Vite after changing `.env.local`.
+3. Sign into the bundled CLI with `npx supabase login`, then run `npx supabase link --project-ref YOUR_PROJECT_REF`. Linking selects the remote project; it does **not** install the application's tables or Edge Functions.
+4. Run `npx supabase db push --dry-run` and inspect the pending migration. Then run `npx supabase db push` once. This applies `supabase/migrations/20261001000000_initial.sql`, including RLS and private Storage buckets. If you already ran that SQL directly in the Supabase SQL Editor, do not apply it a second time; use `npx supabase migration list` to inspect the migration history first.
+5. Set the core function secret with `npx supabase secrets set APP_URL=http://localhost:5173`, then deploy `npx supabase functions deploy public-tour`. This function is needed for every published tour. Supabase supplies `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to hosted functions; do not set or commit them yourself.
+6. Optionally run `supabase/seed.sql` **once in a disposable development project** through the Supabase SQL Editor. It adds a public sample at `/tour/the-willow-residence`, using SVG assets in `public/demo/`.
+7. In Supabase Authentication → URL Configuration, set the test project's Site URL to `http://localhost:5173` and allow `http://localhost:5173/**` as a redirect URL. Enable Email provider. Confirm the sign-up email, or disable confirmation only in a disposable test project.
+8. Run `npm run check:setup`. All three core checks should pass. Then run `npm run dev` and open `http://localhost:5173`.
 
-For a fully local Supabase stack, run `supabase start`, `supabase db reset` (which applies the migration and seed), and `supabase functions serve --env-file supabase/.env.local`. Use the local API URL and anon key printed by `supabase status` in `.env.local`. Copy the Edge Function secrets into `supabase/.env.local`; this file is ignored by Git. Use `stripe listen --forward-to http://127.0.0.1:54321/functions/v1/stripe-webhook` for local Stripe webhooks and set the printed signing secret. The local function `APP_URL` should be `http://localhost:5173`.
+Stripe is optional for the first property-tour test. When ready, set `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`, and `STRIPE_WEBHOOK_SECRET` as Supabase Edge Function secrets, then deploy `create-checkout`, `customer-portal`, and `stripe-webhook` with `npx supabase functions deploy FUNCTION_NAME`. The included `supabase/config.toml` disables gateway JWT checks; the billing functions verify the signed-in owner themselves, and the webhook verifies Stripe's signature.
+
+For a fully local Supabase stack, start Docker Desktop, run `npx supabase start` (which applies the migration and seed), and `npx supabase functions serve --env-file supabase/.env.local`. Use the local API URL and publishable/anon key printed by `npx supabase status` in `.env.local`. Put local function secrets in `supabase/.env.local`; this file is ignored by Git. Use `stripe listen --forward-to http://127.0.0.1:54321/functions/v1/stripe-webhook` for local Stripe webhooks and set the printed signing secret. The local function `APP_URL` should be `http://localhost:5173`.
 
 ## Stripe setup
 
