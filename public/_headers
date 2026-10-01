@@ -1,0 +1,15 @@
+# Private app routes cannot be framed; published tours can be embedded.
+/dashboard
+  Content-Security-Policy: frame-ancestors 'none'
+/properties
+  Content-Security-Policy: frame-ancestors 'none'
+/properties/*
+  Content-Security-Policy: frame-ancestors 'none'
+/billing
+  Content-Security-Policy: frame-ancestors 'none'
+/settings
+  Content-Security-Policy: frame-ancestors 'none'
+/setup
+  Content-Security-Policy: frame-ancestors 'none'
+/login
+  Content-Security-Policy: frame-ancestors 'none'

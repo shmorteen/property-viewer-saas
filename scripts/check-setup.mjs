@@ -41,8 +41,6 @@ if (!key || (!key.startsWith('sb_publishable_') && legacyRole !== 'anon')) {
   console.error('FAIL VITE_SUPABASE_ANON_KEY must contain the publishable or legacy anon key, never a secret key.')
   process.exit(1)
 }
-if (env.VITE_APP_URL !== 'http://localhost:5173') console.warn('WARN VITE_APP_URL is not http://localhost:5173. Check the local port and Edge Function APP_URL secret.')
-
 const headers = { apikey: key, Authorization: `Bearer ${key}` }
 async function request(path, options = {}) {
   try {

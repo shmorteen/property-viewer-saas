@@ -8,7 +8,8 @@ Deno.serve(async req => {
   const secret = Deno.env.get('STRIPE_SECRET_KEY')
   const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')
   const signature = req.headers.get('stripe-signature')
-  if (!secret || !webhookSecret || !signature) return json({ error: 'Webhook not configured' }, 500)
+  if (!secret || !webhookSecret) return json({ error: 'Webhook not configured' }, 500)
+  if (!signature) return json({ error: 'Invalid signature' }, 400)
   const stripe = new Stripe(secret, { apiVersion: '2024-09-30.acacia', httpClient: Stripe.createFetchHttpClient() })
   let event: Stripe.Event
   try {

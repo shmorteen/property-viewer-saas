@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { invoke, supabase } from './supabase'
 import type { FloorPlan, Organization, Property, Room, RoomMedia, RoomPolygon, Subscription, Tour, TourPayload } from './types'
 
 function checked<T>(data: T | null, error: { message: string } | null): T { if (error) throw new Error(error.message); if (data === null) throw new Error('No data returned'); return data }
@@ -16,7 +16,24 @@ export async function saveProperty(value: Omit<Property, 'id' | 'created_at' | '
   const { data, error } = value.id ? await supabase.from('properties').update(value).eq('id', value.id).select('*').single() : await supabase.from('properties').insert(value).select('*').single()
   return checked(data, error) as Property
 }
-export async function deleteProperty(id: string): Promise<void> { const { error } = await supabase.from('properties').delete().eq('id', id); if (error) throw error }
+export async function deleteProperty(id: string): Promise<string[]> {
+  const [floor, rooms] = await Promise.all([getFloorPlan(id), listRooms(id)])
+  const media = await listMedia(rooms.map(room => room.id))
+  const { error } = await supabase.from('properties').delete().eq('id', id)
+  if (error) throw error
+
+  const failures: string[] = []
+  for (const [bucket, paths] of [
+    ['floor-plans', floor ? [floor.storage_path] : []],
+    ['room-photos', media.map(item => item.storage_path)],
+  ] as const) {
+    for (let start = 0; start < paths.length; start += 1000) {
+      const { error: storageError } = await supabase.storage.from(bucket).remove(paths.slice(start, start + 1000))
+      if (storageError) failures.push(bucket)
+    }
+  }
+  return failures
+}
 export async function getFloorPlan(propertyId: string): Promise<FloorPlan | null> { const { data, error } = await supabase.from('floor_plans').select('*').eq('property_id', propertyId).maybeSingle(); if (error) throw error; return data as FloorPlan | null }
 export async function saveFloorPlan(propertyId: string, path: string, width: number, height: number): Promise<FloorPlan> { const { data, error } = await supabase.from('floor_plans').upsert({ property_id: propertyId, storage_path: path, width, height }, { onConflict: 'property_id' }).select('*').single(); return checked(data, error) as FloorPlan }
 export async function listRooms(propertyId: string): Promise<Room[]> { const { data, error } = await supabase.from('rooms').select('*').eq('property_id', propertyId).order('sort_order'); return checked(data, error) as Room[] }
@@ -43,4 +60,4 @@ export async function upload(bucket: string, orgId: string, propertyId: string |
   return path
 }
 export async function removeObject(bucket: string, path: string): Promise<void> { const { error } = await supabase.storage.from(bucket).remove([path]); if (error) throw error }
-export async function getPublicTour(slug: string): Promise<TourPayload> { const { data, error } = await supabase.functions.invoke('public-tour', { body: { slug } }); if (error) throw error; if (data?.error) throw new Error(data.error); return data as TourPayload }
+export async function getPublicTour(slug: string): Promise<TourPayload> { const data = await invoke<TourPayload & { error?: string }>('public-tour', { slug }); if (data?.error) throw new Error(data.error); return data }
