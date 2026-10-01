@@ -1,0 +1,11 @@
+export type PropertyStatus = 'draft' | 'active' | 'under_offer' | 'sold' | 'let'
+export type Organization = { id: string; name: string; slug: string; logo_path: string | null; website: string | null; created_at: string }
+export type Property = { id: string; organization_id: string; title: string; address: string; description: string; property_type: string; bedrooms: number; bathrooms: number; status: PropertyStatus; created_at: string; updated_at: string }
+export type FloorPlan = { id: string; property_id: string; storage_path: string; width: number; height: number; created_at: string }
+export type Room = { id: string; property_id: string; name: string; description: string; sort_order: number; created_at: string }
+export type RoomMedia = { id: string; room_id: string; storage_path: string; alt_text: string; sort_order: number; created_at: string; url?: string }
+export type Point = { x: number; y: number }
+export type RoomPolygon = { id: string; floor_plan_id: string; room_id: string; points: Point[]; created_at: string }
+export type Tour = { id: string; property_id: string; slug: string; published: boolean; published_at: string | null; created_at: string }
+export type Subscription = { organization_id: string; stripe_customer_id: string | null; stripe_subscription_id: string | null; stripe_price_id: string | null; plan: 'free' | 'professional'; status: string; current_period_end: string | null }
+export type TourPayload = { property: Property; organization: Organization & { logo_url?: string }; floor_plan: (FloorPlan & { url: string }) | null; rooms: (Room & { media: RoomMedia[] })[]; polygons: RoomPolygon[]; tour: Tour }

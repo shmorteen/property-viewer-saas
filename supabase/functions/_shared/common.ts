@@ -1,0 +1,6 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+export const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' }
+export function json(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } }) }
+export function service() { return createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } }) }
+export async function authorize(req: Request, organizationId: string) { const token = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, ''); if (!token) throw new Error('Authentication required'); const admin = service(); const { data: { user }, error } = await admin.auth.getUser(token); if (error || !user) throw new Error('Authentication required'); const { data: member } = await admin.from('organization_members').select('role').eq('organization_id', organizationId).eq('user_id', user.id).single(); if (member?.role !== 'owner') throw new Error('Organization owner access required'); return { admin, user } }
+export function appUrl() { return Deno.env.get('APP_URL')?.replace(/\/$/, '') || 'http://localhost:5173' }
