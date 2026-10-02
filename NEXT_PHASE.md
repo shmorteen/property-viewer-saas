@@ -1,12 +1,22 @@
-# Next phase ideas
+# Next phase: structured layout to 3D tour
 
-These are planned directions, not part of V1.
+The current milestone is the **Property Layout Builder**: a focused, editable model of levels, indoor and outdoor spaces, polygons, openings, stairs, and photos. The next milestone should follow this path:
 
-1. **Automatic floor-plan room detection:** add an opt-in processing job that proposes polygon boundaries and room names. Agents review and edit proposals in the existing normalized polygon editor before publishing.
-2. **Python/FastAPI processing worker:** add a queued worker with scoped service credentials, idempotent jobs, status tracking, and separate derived-asset storage. The app should request work through an authenticated Edge Function; worker output should map back to existing properties, rooms, and floor plans.
-3. **AI 3D reconstruction:** process vetted floor plans and room imagery into geometry and textures, with explicit quality checks and an agent approval step.
-4. **React Three Fiber viewer:** add a 3D presentation mode to the public tour payload. Keep the V1 2D floor-plan and gallery viewer available as a fallback.
-5. **Automatic walkthrough generation:** generate a suggested room sequence, camera path, and exportable walkthrough from approved spatial data.
-6. **Analytics:** extend minimal view counts with privacy-conscious events, referrers, conversions, and per-tour reporting; define retention and consent requirements first.
-7. **White-label and custom domains:** add domain verification, tenant-aware routing, branding controls, and domain-specific embed policies.
-8. **API and SDK integration:** provide scoped API keys, rate limits, webhooks, and a small JavaScript embed SDK for agencies with larger listing workflows.
+```text
+Property Layout Builder
+        ↓
+Python Geometry Processor
+        ↓
+3D GLB Generation
+        ↓
+React Three Fiber Viewer
+        ↓
+Existing /tour/:slug
+```
+
+1. **Python Geometry Processor:** accept the structured property payload through an authenticated, queued job. Validate polygon topology, elevations, space heights, wall openings, and stair connections. Keep jobs idempotent and store errors per property without blocking the existing 2D tour.
+2. **3D GLB Generation:** produce a versioned GLB asset and manifest from validated geometry. Keep source geometry and derived files separate, with explicit quality checks and a way to regenerate after layout edits.
+3. **React Three Fiber Viewer:** add an optional 3D presentation mode to the existing tour. Keep the current floor-plan and photo viewer available as a fallback.
+4. **Existing `/tour/:slug`:** preserve current public links and iframe embeds. Extend the tour payload with a 3D asset reference only when a verified GLB exists.
+
+This roadmap does not turn the editor into CAD, BIM, interior-design, or construction software. Furniture, electrical/plumbing plans, structural calculations, roof design, and arbitrary drafting remain outside scope.
