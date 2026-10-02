@@ -3,7 +3,7 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 import reactHooks from 'eslint-plugin-react-hooks'
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', '.npm-cache', '.local-backups', 'supabase/functions'] },
+  { ignores: ['dist', 'node_modules', '.npm-cache', '.local-backups', 'supabase/functions', 'services/reconstruction/.venv', '.pytest_cache', '**/__pycache__'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   { files: ['scripts/**/*.mjs'], languageOptions: { globals: globals.node } },

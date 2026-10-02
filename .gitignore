@@ -8,3 +8,6 @@ supabase/.temp/
 *.log
 *.tsbuildinfo
 .local-backups/
+services/reconstruction/.venv/
+__pycache__/
+.pytest_cache/

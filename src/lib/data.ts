@@ -1,5 +1,5 @@
 import { invoke, supabase } from './supabase'
-import type { FloorPlan, Level, Opening, Organization, Property, Room, RoomMedia, RoomPolygon, StairConnection, Subscription, Tour, TourPayload } from './types'
+import type { FloorPlan, Level, Opening, Organization, ProcessingJob, Property, PropertyModel, Room, RoomMedia, RoomPolygon, StairConnection, Subscription, Tour, TourPayload } from './types'
 
 function checked<T>(data: T | null, error: { message: string } | null): T { if (error) throw new Error(error.message); if (data === null) throw new Error('No data returned'); return data }
 export async function listOrganizations(): Promise<Organization[]> { const { data, error } = await supabase.from('organizations').select('*').order('created_at'); return checked(data, error) as Organization[] }
@@ -12,12 +12,17 @@ export async function createOrganization(name: string): Promise<void> {
 export async function updateOrganization(id: string, patch: Partial<Pick<Organization, 'name' | 'website' | 'logo_path'>>): Promise<void> { const { error } = await supabase.from('organizations').update(patch).eq('id', id); if (error) throw error }
 export async function listProperties(orgId: string): Promise<Property[]> { const { data, error } = await supabase.from('properties').select('*').eq('organization_id', orgId).order('updated_at', { ascending: false }); return checked(data, error) as Property[] }
 export async function getProperty(id: string): Promise<Property> { const { data, error } = await supabase.from('properties').select('*').eq('id', id).single(); return checked(data, error) as Property }
+export async function getLatestJob(propertyId: string): Promise<ProcessingJob | null> { const { data, error } = await supabase.from('processing_jobs').select('*').eq('property_id', propertyId).order('created_at', { ascending: false }).limit(1).maybeSingle(); if (error) throw error; return data as ProcessingJob | null }
+export async function queueModelJob(propertyId: string): Promise<void> { const { error } = await supabase.from('processing_jobs').insert({ property_id: propertyId }); if (error) throw error }
+export async function getLatestModel(propertyId: string): Promise<PropertyModel | null> { const { data, error } = await supabase.from('property_models').select('*').eq('property_id', propertyId).order('version', { ascending: false }).limit(1).maybeSingle(); if (error) throw error; return data as PropertyModel | null }
+export async function getSignedModel(propertyId: string): Promise<PropertyModel | null> { const model = await getLatestModel(propertyId); if (!model) return null; const [glb_url, scene_url] = await Promise.all([signedUrl('property-models', model.glb_path), signedUrl('property-models', model.scene_path)]); return { ...model, glb_url, scene_url } }
 export async function saveProperty(value: Omit<Property, 'id' | 'created_at' | 'updated_at'> & { id?: string }): Promise<Property> {
   const { data, error } = value.id ? await supabase.from('properties').update(value).eq('id', value.id).select('*').single() : await supabase.from('properties').insert(value).select('*').single()
   return checked(data, error) as Property
 }
 export async function deleteProperty(id: string): Promise<string[]> {
-  const [floors, rooms] = await Promise.all([listFloorPlans(id), listRooms(id)])
+  const [floors, rooms, models] = await Promise.all([listFloorPlans(id), listRooms(id), supabase.from('property_models').select('glb_path,scene_path').eq('property_id', id)])
+  if (models.error) throw models.error
   const media = await listMedia(rooms.map(room => room.id))
   const { error } = await supabase.from('properties').delete().eq('id', id)
   if (error) throw error
@@ -26,6 +31,7 @@ export async function deleteProperty(id: string): Promise<string[]> {
   for (const [bucket, paths] of [
     ['floor-plans', floors.map(floor => floor.storage_path)],
     ['room-photos', media.map(item => item.storage_path)],
+    ['property-models', (models.data || []).flatMap(item => [item.glb_path, item.scene_path])],
   ] as const) {
     for (let start = 0; start < paths.length; start += 1000) {
       const { error: storageError } = await supabase.storage.from(bucket).remove(paths.slice(start, start + 1000))

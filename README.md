@@ -1,6 +1,6 @@
 # Property Viewer
 
-An interactive property tour SaaS for estate agencies. Teams create properties, compose multi-level layouts with indoor and outdoor spaces, attach photos, preview the tour, and publish a link or iframe embed. The application uses React, Vite, TypeScript, Tailwind CSS, shadcn style UI primitives, Supabase, Konva, and Stripe.
+An interactive property tour SaaS for estate agencies. Teams create properties, compose multi-level layouts with indoor and outdoor spaces, attach photos, generate an open-top 3D model, preview the tour, and publish a link or iframe embed. The application uses React, Vite, TypeScript, Tailwind CSS, Supabase, Konva, React Three Fiber, a Python reconstruction worker, and Stripe.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ Run commands from this repository's **outer** `property-viewer-saas` directory, 
 1. Run `npm install`.
 2. Copy `.env.example` to `.env.local`. Set `VITE_SUPABASE_URL` to the **Project URL** from Supabase's Connect panel and `VITE_SUPABASE_ANON_KEY` to its **publishable key** (the variable name is retained for compatibility). Do not use the Postgres connection string or a secret/service-role key in the frontend. Restart Vite after changing `.env.local`.
 3. Sign into the bundled CLI with `npx supabase login`, then run `npx supabase link --project-ref YOUR_PROJECT_REF`. Linking selects the remote project; it does **not** install the application's tables or Edge Functions.
-4. Run `npx supabase db push --dry-run` and inspect the pending migrations. Then run `npx supabase db push` once. The initial migration creates the original tour schema, RLS, and private Storage buckets. The layout migrations add levels, typed spaces, openings, stairs, and safe level deletion. If you already ran SQL directly in the Supabase SQL Editor, inspect `npx supabase migration list` before pushing so it is not applied twice.
+4. Run `npx supabase db push --dry-run` and inspect the pending migrations. Then run `npx supabase db push` once. The initial migration creates the original tour schema, RLS, and private Storage buckets. The layout migrations add levels, typed spaces, openings, stairs, and safe level deletion. The reconstruction migration adds private model storage, jobs, models, and width scale. If you already ran SQL directly in the Supabase SQL Editor, inspect `npx supabase migration list` before pushing so it is not applied twice.
 5. Set the core function secret with `npx supabase secrets set APP_URL=http://localhost:5173`, then deploy `npx supabase functions deploy public-tour`. This function is needed for every published tour. Supabase supplies `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to hosted functions; do not set or commit them yourself.
 6. Optionally run `supabase/seed.sql` **once in a disposable development project** through the Supabase SQL Editor. It adds a public sample at `/tour/the-willow-residence`, using SVG assets in `public/demo/`.
 7. In Supabase Authentication → URL Configuration, set the test project's Site URL to `http://localhost:5173` and allow `http://localhost:5173/**` as a redirect URL. Enable Email provider. Confirm the sign-up email, or disable confirmation only in a disposable test project.
@@ -43,9 +43,30 @@ Select a space with a polygon, choose **Door**, **Double door**, **Window**, or 
 
 Upload multiple original photos to each space and remove them in the selected-space inspector. Preview the tour, then publish when **every** space across all levels has at least one photo and one polygon. A floor-plan background is optional. The Publish screen provides the same public `/tour/:slug` URL and iframe code as before. Unpublishing removes access through the public function immediately; signed image URLs already issued may remain valid for up to one hour.
 
+## 3D reconstruction worker
+
+The **Generate 3D model** action on a property's detail page queues a database job. The Python service claims jobs, reads existing levels, normalized room polygons, room details, and photo metadata, then generates `model.glb` and `scene.json`. It scales each canvas to the property's approximate plan width in metres (default 12 m), uses each level's elevation and each room's height (default 2.7 m), and places camera anchors at approximately 1.6 m. Indoor room boundaries become open-top walls; outdoor spaces remain flat. The generated files are versioned in the private `property-models` bucket. Photos remain full-resolution room media and open through the 3D tour's room photo action. The current model stays available while a rebuild runs or fails.
+
+Run locally in a **separate terminal** after applying migrations:
+
+```powershell
+cd services/reconstruction
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+$env:SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co'
+$env:SUPABASE_SERVICE_ROLE_KEY = 'YOUR_SERVICE_ROLE_KEY'
+.\.venv\Scripts\python.exe -m uvicorn app:app --host 127.0.0.1 --port 8000
+```
+
+Use the **service_role** key from Supabase Project Settings → API Keys only in this server-side process. Do not put it in `.env.local`, a `VITE_` variable, Netlify, or Git. `GET http://127.0.0.1:8000/healthz` confirms the worker is running. Keep exactly one worker process per project; it polls the database every five seconds. Its `POLL_SECONDS` environment variable can be changed. The FastAPI service has no public job-creation endpoint: authenticated editors queue jobs through RLS, and only the service role can claim and write them. The UI shows Queued, Processing, Completed, or Failed with errors. A failed job can be retried with **Rebuild 3D model**.
+
+For a hosted worker, deploy `services/reconstruction/Dockerfile` to a container host with one always-on instance and a health check on `/healthz`. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as server-side secrets on that host; do not expose the service publicly beyond its health endpoint unless access control is added. Netlify hosts only the Vite frontend; its functions do not run this long-lived poller. If the worker is stopped, queued jobs wait safely in Postgres until it returns. For local Docker, build from the `services/reconstruction` directory and provide the same two environment variables to `docker run`.
+
+Run `services/reconstruction/.venv/Scripts/python.exe -m pytest services/reconstruction/test_geometry.py` from the repository root to validate multi-room GLB export and stable IDs. After generation, open the private preview and choose **3D Tour**. The same room selection drives the GLB, floor plan, room list, and photo view. The public function issues short-lived signed GLB/scene URLs only for published tours. Existing tour links and iframe embeds continue to work; tours without a model offer Floor Plan and Photos.
+
 ### Migration notes
 
-`20261002000000_layout_composer.sql` adds the new tables and columns without replacing legacy room, photo, polygon, property, or tour IDs. It creates one Ground Floor for every existing property, attaches old rooms and floor plans to it, and keeps legacy polygons and photos. `20261002010000_layout_safety.sql` restricts direct level deletion and keeps stair connections consistent when a space changes type. Both migrations use organization ownership rules; newly added tables have RLS. Deploy the updated `public-tour` Edge Function after migrating so published tours return levels, spaces, openings, and stairs. The legacy `floor_plan` field remains in the tour payload for compatibility.
+`20261002000000_layout_composer.sql` adds the new tables and columns without replacing legacy room, photo, polygon, property, or tour IDs. It creates one Ground Floor for every existing property, attaches old rooms and floor plans to it, and keeps legacy polygons and photos. `20261002010000_layout_safety.sql` restricts direct level deletion and keeps stair connections consistent when a space changes type. `20261002020000_reconstruction.sql` adds model jobs, versioned model records, and private Storage. These migrations use organization ownership rules; newly added tables have RLS. Deploy the updated `public-tour` Edge Function after migrating so published tours return signed model URLs when a model exists. The legacy `floor_plan` field remains in the tour payload for compatibility.
 
 Uploads are limited to 15 MB and accepted image MIME types in both the client and private Supabase buckets. Paths begin with the organization UUID. Storage policies restrict access to organization members. The public viewer gets only a published property's necessary data and short-lived signed media URLs from `public-tour`; it has no direct anonymous table or bucket access. `tour_views` stores a minimal view count without visitor identifiers.
 
@@ -63,6 +84,9 @@ Run `npm run typecheck`, `npm run lint`, and `npm run build`. Then verify in a c
 6. Navigate the existing published `/tour/:slug` route. Paste its iframe snippet into a page on a different origin and verify level/space switching; unpublish and confirm the route stops loading.
 7. With a second account and organization, attempt direct reads/updates and storage access to the first organization's IDs. They must be denied by RLS/storage policies. Anonymous table reads must be denied.
 8. In Stripe test mode, complete checkout, receive webhook, open the customer portal, and cancel. Confirm `subscriptions` updates and Free publishing limits apply.
+9. Start the Python worker, generate a model for a property with several room polygons, and confirm the management page reaches Completed. Rebuild and confirm the model version increases. Inspect the generated GLB and scene JSON for the same room IDs and photo associations.
+10. In private preview, select a room from the floor plan and room list, switch to 3D Tour, and confirm the same room is highlighted and focused. Select another room in 3D, open its photos, and use Reset camera. Use a browser with WebGL enabled for the visual 3D check.
+11. Confirm a published tour with a model loads through `/tour/:slug` and from an iframe on a different origin. Confirm a published tour without a model still offers Floor Plan and Photos.
 
 ## Deployment
 
@@ -79,4 +103,4 @@ After Netlify assigns the permanent HTTPS origin, set the Supabase Edge Function
 - `supabase/functions/`: public tour and Stripe server-side operations
 - `supabase/seed.sql` and `public/demo/`: sample public tour
 
-The tour response is a presentation payload assembled at the backend edge. A future Python geometry processor can consume ordered levels (including elevations), spaces and their normalized polygons, types and heights, wall openings, stair connections, and photos. A later 3D viewer can consume derived GLB geometry alongside the current 2D tour without changing property ownership or `/tour/:slug`.
+The tour response is a presentation payload assembled at the backend edge. The Python worker consumes ordered levels, room polygons, heights, and linked photos and exports a GLB with room IDs. Future photographic reconstruction is outlined in `NEXT_PHASE.md`.

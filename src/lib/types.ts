@@ -1,6 +1,6 @@
 export type PropertyStatus = 'draft' | 'active' | 'under_offer' | 'sold' | 'let'
 export type Organization = { id: string; name: string; slug: string; logo_path: string | null; website: string | null; created_at: string }
-export type Property = { id: string; organization_id: string; title: string; address: string; description: string; property_type: string; bedrooms: number; bathrooms: number; status: PropertyStatus; created_at: string; updated_at: string }
+export type Property = { id: string; organization_id: string; title: string; address: string; description: string; property_type: string; bedrooms: number; bathrooms: number; status: PropertyStatus; layout_width_m: number; created_at: string; updated_at: string }
 export type LevelType = 'site' | 'ground' | 'upper' | 'basement' | 'roof_terrace' | 'custom'
 export type Level = { id: string; property_id: string; name: string; level_type: LevelType; sort_order: number; elevation: number; canvas_width: number; canvas_height: number; created_at: string }
 export type SpaceCategory = 'indoor' | 'outdoor'
@@ -17,4 +17,8 @@ export type StairType = 'straight' | 'l_shaped' | 'u_shaped'
 export type StairConnection = { id: string; space_id: string; destination_level_id: string; stair_type: StairType; created_at: string }
 export type Tour = { id: string; property_id: string; slug: string; published: boolean; published_at: string | null; created_at: string }
 export type Subscription = { organization_id: string; stripe_customer_id: string | null; stripe_subscription_id: string | null; stripe_price_id: string | null; plan: 'free' | 'professional'; status: string; current_period_end: string | null }
-export type TourPayload = { property: Property; organization: Organization & { logo_url?: string }; floor_plan: (FloorPlan & { url: string }) | null; floor_plans?: (FloorPlan & { url: string })[]; levels?: Level[]; rooms: (Room & { media: RoomMedia[] })[]; polygons: RoomPolygon[]; openings?: Opening[]; stairs?: StairConnection[]; tour: Tour }
+export type ProcessingJob = { id: string; property_id: string; status: 'queued' | 'processing' | 'completed' | 'failed'; progress: number; error_message: string | null; started_at: string | null; completed_at: string | null; created_at: string }
+export type PropertyModel = { id: string; property_id: string; glb_path: string; scene_path: string; version: number; created_at: string; glb_url?: string; scene_url?: string }
+export type ModelRoom = { id: string; name: string; level_id: string; category: SpaceCategory; center: [number, number, number]; camera_anchor: [number, number, number]; polygon: [number, number][]; photo_ids: string[] }
+export type ModelScene = { schema_version: number; property_id: string; units: string; levels: { id: string; name: string; elevation: number }[]; rooms: ModelRoom[] }
+export type TourPayload = { property: Property; organization: Organization & { logo_url?: string }; floor_plan: (FloorPlan & { url: string }) | null; floor_plans?: (FloorPlan & { url: string })[]; levels?: Level[]; rooms: (Room & { media: RoomMedia[] })[]; polygons: RoomPolygon[]; openings?: Opening[]; stairs?: StairConnection[]; model?: PropertyModel | null; tour: Tour }
