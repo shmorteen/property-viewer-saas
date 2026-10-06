@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Circle, Group, Image as KonvaImage, Layer, Line, Stage, Text } from 'react-konva'
 import type Konva from 'konva'
 import { clamp, nearestSegment, pointOnSegment } from '../lib/geometry'
+import { wallPoint, type LayoutGraph } from '../lib/topology'
 import type { Opening, Point, Room, RoomPolygon } from '../lib/types'
 
 function useImage(url: string | null) {
@@ -29,6 +30,7 @@ type CanvasProps = {
   rooms: Room[]
   polygons: RoomPolygon[]
   openings?: Opening[]
+  topology?: LayoutGraph
   selectedRoomId: string | null
   selectedPolygonId: string | null
   selectedOpeningId?: string | null
@@ -46,7 +48,7 @@ type CanvasProps = {
   onMoveOpening?: (opening: Opening, position: number) => void
 }
 
-export function FloorPlanCanvas({ url, imageWidth, imageHeight, rooms, polygons, openings = [], selectedRoomId, selectedPolygonId, selectedOpeningId, draft, drawing, placingOpening = false, editable, showGrid = false, onBackgroundClick, onSelectPolygon, onSelectOpening, onWallClick, onMovePoint, onMovePolygon, onMoveOpening }: CanvasProps) {
+export function FloorPlanCanvas({ url, imageWidth, imageHeight, rooms, polygons, openings = [], topology, selectedRoomId, selectedPolygonId, selectedOpeningId, draft, drawing, placingOpening = false, editable, showGrid = false, onBackgroundClick, onSelectPolygon, onSelectOpening, onWallClick, onMovePoint, onMovePolygon, onMoveOpening }: CanvasProps) {
   const parent = useRef<HTMLDivElement>(null)
   const stage = useRef<Konva.Stage>(null)
   const [width, setWidth] = useState(500)
@@ -63,6 +65,7 @@ export function FloorPlanCanvas({ url, imageWidth, imageHeight, rooms, polygons,
         {image && <KonvaImage image={image} width={width} height={height} listening={false} />}
         {showGrid && Array.from({ length: 39 }, (_, i) => <Line key={`v-${i}`} points={[(i + 1) * .025 * width, 0, (i + 1) * .025 * width, height]} stroke="#205c5720" strokeWidth={1} listening={false} />)}
         {showGrid && Array.from({ length: 39 }, (_, i) => <Line key={`h-${i}`} points={[0, (i + 1) * .025 * height, width, (i + 1) * .025 * height]} stroke="#205c5720" strokeWidth={1} listening={false} />)}
+        {topology && topology.property_boundary.length > 2 && <Line points={topology.property_boundary.flatMap(p => [p.x * width, p.y * height])} closed stroke="#80619c" strokeWidth={3} dash={[10, 5]} listening={false}/>}
         {polygons.map(poly => {
           const room = rooms.find(item => item.id === poly.room_id)
           const selected = selectedPolygonId === poly.id
@@ -70,11 +73,14 @@ export function FloorPlanCanvas({ url, imageWidth, imageHeight, rooms, polygons,
           const center = poly.points.reduce((acc, p) => ({ x: acc.x + p.x / poly.points.length, y: acc.y + p.y / poly.points.length }), { x: 0, y: 0 })
           const color = room?.space_type === 'stairs' ? '#7755a1' : room?.category === 'outdoor' ? '#4b8a66' : '#205c57'
           return <Group key={poly.id}>
-            <Line points={poly.points.flatMap(p => [p.x * width, p.y * height])} closed fill={`${color}${active || selected ? '55' : '30'}`} stroke={color} strokeWidth={selected ? 4 : 2} draggable={editable && selected && !drawing && !placingOpening} onClick={e => { e.cancelBubble = true; if (placingOpening) wallClick(poly); else if (!drawing) onSelectPolygon(poly) }} onTap={e => { e.cancelBubble = true; if (placingOpening) wallClick(poly); else if (!drawing) onSelectPolygon(poly) }} onDragEnd={e => { const delta = { x: e.target.x() / width, y: e.target.y() / height }; e.target.position({ x: 0, y: 0 }); onMovePolygon?.(poly, delta) }} />
+            <Line points={poly.points.flatMap(p => [p.x * width, p.y * height])} closed fill={`${color}${active || selected ? '55' : '30'}`} stroke={color} strokeWidth={topology && room?.category === 'indoor' ? 0 : selected ? 4 : 2} draggable={editable && selected && !drawing && !placingOpening} onClick={e => { e.cancelBubble = true; if (placingOpening) wallClick(poly); else if (!drawing) onSelectPolygon(poly) }} onTap={e => { e.cancelBubble = true; if (placingOpening) wallClick(poly); else if (!drawing) onSelectPolygon(poly) }} onDragEnd={e => { const delta = { x: e.target.x() / width, y: e.target.y() / height }; e.target.position({ x: 0, y: 0 }); onMovePolygon?.(poly, delta) }} />
             <Text x={center.x * width - 52} y={center.y * height - 9} width={104} align="center" text={room?.name || 'Space'} fontSize={Math.max(11, Math.min(16, width / 36))} fontStyle="bold" fill="#13292a" shadowColor="white" shadowBlur={5} listening={false} />
             {selected && editable && !drawing && !placingOpening && poly.points.map((p, i) => <Circle key={i} x={p.x * width} y={p.y * height} radius={8} hitStrokeWidth={18} fill="white" stroke={color} strokeWidth={2} draggable dragBoundFunc={position => ({ x: clamp(position.x, 0, width), y: clamp(position.y, 0, height) })} onDragEnd={e => onMovePoint?.(poly, i, { x: e.target.x() / width, y: e.target.y() / height })} />)}
           </Group>
         })}
+        {topology?.walls.map(wall => { const a = wallPoint(topology, wall, 0), b = wallPoint(topology, wall, 1); return <Line key={`topology-wall-${wall.id}`} points={[a.x * width, a.y * height, b.x * width, b.y * height]} stroke={wall.kind === 'exterior' ? '#173939' : '#386661'} strokeWidth={wall.kind === 'exterior' ? 6 : 4} dash={wall.kind === 'virtual' ? [8, 5] : undefined} listening={false}/> })}
+        {topology?.openings.map(opening => { const wall = topology.walls.find(item => item.id === opening.wall_id); if (!wall) return null; const a = wallPoint(topology, wall, opening.start), b = wallPoint(topology, wall, opening.end), door = opening.type.includes('door'); return <Line key={`topology-opening-${opening.id}`} points={[a.x * width, a.y * height, b.x * width, b.y * height]} stroke={door ? '#ad552f' : '#2788ae'} strokeWidth={7} listening={false}/> })}
+        {topology?.openings.filter(opening => opening.type.includes('door')).map(opening => { const wall = topology.walls.find(item => item.id === opening.wall_id); if (!wall) return null; const hinge = wallPoint(topology, wall, opening.start), tip = wallPoint(topology, wall, opening.end), radius = Math.hypot((tip.x - hinge.x) * width, (tip.y - hinge.y) * height), base = Math.atan2((tip.y - hinge.y) * height, (tip.x - hinge.x) * width); const arc = Array.from({ length: 13 }, (_, i) => { const angle = base + opening.swing * i / 12 * Math.PI / 2; return [hinge.x * width + Math.cos(angle) * radius, hinge.y * height + Math.sin(angle) * radius] }).flat(); return <Line key={`topology-swing-${opening.id}`} points={arc} stroke="#ad552f" strokeWidth={2} dash={[5,4]} listening={false}/> })}
         {openings.map(opening => {
           const polygon = polygons.find(item => item.id === opening.polygon_id)
           if (!polygon || opening.segment_index >= polygon.points.length) return null

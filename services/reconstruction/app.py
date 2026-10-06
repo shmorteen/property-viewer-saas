@@ -43,6 +43,9 @@ def process_job(db: Client, job: dict) -> None:
         raise ValueError("Property no longer exists")
     property_row = property_rows[0]
     levels = _rows(db, "levels", "property_id", property_id)
+    layout_graphs = []
+    for level in levels:
+        layout_graphs.extend(_rows(db, "layout_graphs", "level_id", level["id"]))
     rooms = _rows(db, "rooms", "property_id", property_id)
     polygons = _rows(db, "room_polygons", "level_id", levels[0]["id"]) if len(levels) == 1 else []
     if len(levels) != 1:
@@ -59,7 +62,7 @@ def process_job(db: Client, job: dict) -> None:
             photo["width"], photo["height"] = image_size(data)
         except Exception as exc:
             logger.warning("Could not inspect photo %s: %s", photo["id"], exc)
-    glb, manifest = build_model(property_row, levels, rooms, polygons, photos)
+    glb, manifest = build_model(property_row, levels, rooms, polygons, photos, layout_graphs)
     progress(70)
     existing = db.table("property_models").select("version").eq("property_id", property_id).order("version", desc=True).limit(1).execute().data or []
     version = (existing[0]["version"] if existing else 0) + 1

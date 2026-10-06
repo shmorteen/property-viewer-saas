@@ -25,6 +25,10 @@ Deno.serve(async req => {
       admin.from('rooms').select('*').eq('property_id', property.id).order('sort_order'),
       admin.from('property_models').select('*').eq('property_id', property.id).order('version', { ascending: false }).limit(1).maybeSingle(),
     ])
+    const [{ data: layoutGraphs }, { data: propertyBoundary }] = await Promise.all([
+      (levels || []).length ? admin.from('layout_graphs').select('level_id,graph').in('level_id', (levels || []).map(level => level.id)) : Promise.resolve({ data: [] }),
+      admin.from('property_boundaries').select('points').eq('property_id', property.id).maybeSingle(),
+    ])
     const roomIds = (rooms || []).map(room => room.id)
     const [{ data: media }, { data: polygons }, { data: openings }, { data: stairs }] = await Promise.all([
       roomIds.length ? admin.from('room_media').select('*').in('room_id', roomIds).order('sort_order') : Promise.resolve({ data: [] }),
@@ -49,6 +53,7 @@ Deno.serve(async req => {
       rooms: (rooms || []).map(room => ({ ...room, media: resolvedMedia.filter(item => item.room_id === room.id) })),
       polygons: polygons || [],
       openings: openings || [],
+      layout_graphs: (layoutGraphs || []).map(item => ({ level_id: item.level_id, graph: { ...item.graph, property_boundary: propertyBoundary?.points || [] } })),
       stairs: stairs || [],
       model: resolvedModel,
       tour,

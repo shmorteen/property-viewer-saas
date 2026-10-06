@@ -28,20 +28,22 @@ function Model({ url, scene, activeRoomId, activeLevelId, onSelectRoom, resetTok
     return copy
   }, [gltf.scene])
   const roomIds = useMemo(() => new Set(scene.rooms.map(room => room.id)), [scene])
+  const wallById = useMemo(() => new Map((scene.walls || []).map(wall => [wall.id, wall])), [scene])
 
   useEffect(() => {
     object.traverse(child => {
       if (!(child instanceof Mesh)) return
+      const wall = child.name.startsWith('wall_') ? wallById.get(child.name.slice(5, 41)) : undefined
       const roomId = child.name.startsWith('room_') ? child.name.slice(5) :
-        child.name.startsWith('wall_') ? child.name.slice(5, 41) : ''
+        wall?.left_space_id || wall?.right_space_id || (child.name.startsWith('wall_') ? child.name.slice(5, 41) : '')
       const room = scene.rooms.find(item => item.id === roomId)
-      child.visible = Boolean(room && (!activeLevelId || room.level_id === activeLevelId))
+      child.visible = wall ? (!activeLevelId || wall.level_id === activeLevelId) : child.name.startsWith('wall_legacy_') ? (!activeLevelId || child.name.startsWith(`wall_legacy_${activeLevelId}_`)) : Boolean(room && (!activeLevelId || room.level_id === activeLevelId))
       if (child.material instanceof MeshStandardMaterial) {
         child.material.color = new Color(roomId === activeRoomId ? '#58b6a1' :
           child.name.startsWith('wall_') ? '#e6ebe6' : room?.category === 'outdoor' ? '#8cbbaf' : '#e5decf')
       }
     })
-  }, [object, scene, activeRoomId, activeLevelId])
+  }, [object, scene, activeRoomId, activeLevelId, wallById])
 
   useEffect(() => {
     const room = scene.rooms.find(item => item.id === activeRoomId)
@@ -63,8 +65,9 @@ function Model({ url, scene, activeRoomId, activeLevelId, onSelectRoom, resetTok
     let node: Group | Mesh | null = event.object as Mesh
     while (node) {
       const name = node.name
+      const wall = name.startsWith('wall_') ? wallById.get(name.slice(5, 41)) : undefined
       const roomId = name.startsWith('room_') ? name.slice(5) :
-        name.startsWith('wall_') ? name.slice(5, 41) : ''
+        wall?.left_space_id || wall?.right_space_id || (name.startsWith('wall_') ? name.slice(5, 41) : '')
       if (roomIds.has(roomId)) { event.stopPropagation(); onSelectRoom(roomId); return }
       node = node.parent as Group | null
     }

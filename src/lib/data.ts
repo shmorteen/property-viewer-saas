@@ -1,4 +1,5 @@
 import { invoke, supabase } from './supabase'
+import { emptyGraph, faces, type LayoutGraph } from './topology'
 import type { FloorPlan, Level, Opening, Organization, ProcessingJob, Property, PropertyModel, Room, RoomMedia, RoomPolygon, StairConnection, Subscription, Tour, TourPayload } from './types'
 
 function checked<T>(data: T | null, error: { message: string } | null): T { if (error) throw new Error(error.message); if (data === null) throw new Error('No data returned'); return data }
@@ -41,14 +42,30 @@ export async function deleteProperty(id: string): Promise<string[]> {
   return failures
 }
 export async function listLevels(propertyId: string): Promise<Level[]> { const { data, error } = await supabase.from('levels').select('*').eq('property_id', propertyId).order('sort_order').order('created_at'); return checked(data, error) as Level[] }
+export async function ensureDefaultLevel(propertyId: string): Promise<Level> { const { data, error } = await supabase.rpc('ensure_default_level', { pid: propertyId }); return checked(data, error) as Level }
+export async function getLayoutGraph(levelId: string, propertyId: string): Promise<LayoutGraph> {
+  const [graph, boundary] = await Promise.all([
+    supabase.from('layout_graphs').select('graph').eq('level_id', levelId).maybeSingle(),
+    supabase.from('property_boundaries').select('points').eq('property_id', propertyId).maybeSingle(),
+  ])
+  if (graph.error) throw graph.error
+  if (boundary.error) throw boundary.error
+  return { ...emptyGraph(), ...(graph.data?.graph as Partial<LayoutGraph> || {}), property_boundary: (boundary.data?.points || []) as LayoutGraph['property_boundary'] }
+}
+export async function saveLayoutGraph(levelId: string, graph: LayoutGraph): Promise<void> {
+  const derived_rooms = faces(graph).filter(face => face.room_id).map(face => ({ room_id: face.room_id, points: face.points.map(({ x, y }) => ({ x, y })) }))
+  const { error } = await supabase.rpc('save_layout_graph', { lid: levelId, payload: graph, derived_rooms })
+  if (error) throw error
+}
 export async function addLevel(value: Pick<Level, 'property_id' | 'name' | 'level_type' | 'sort_order' | 'elevation'>): Promise<Level> { const { data, error } = await supabase.from('levels').insert(value).select('*').single(); return checked(data, error) as Level }
-export async function updateLevel(id: string, patch: Partial<Pick<Level, 'name' | 'level_type' | 'sort_order' | 'elevation'>>): Promise<void> { const { error } = await supabase.from('levels').update(patch).eq('id', id); if (error) throw error }
+export async function updateLevel(id: string, patch: Partial<Pick<Level, 'name' | 'level_type' | 'sort_order' | 'elevation' | 'canvas_width' | 'canvas_height'>>): Promise<void> { const { error } = await supabase.from('levels').update(patch).eq('id', id); if (error) throw error }
 export async function deleteLevel(id: string): Promise<void> { const { error } = await supabase.rpc('delete_empty_level', { lid: id }); if (error) throw error }
 export async function listFloorPlans(propertyId: string): Promise<FloorPlan[]> { const { data, error } = await supabase.from('floor_plans').select('*').eq('property_id', propertyId); return checked(data, error) as FloorPlan[] }
 export async function getFloorPlan(propertyId: string): Promise<FloorPlan | null> { const { data, error } = await supabase.from('floor_plans').select('*').eq('property_id', propertyId).order('created_at').limit(1).maybeSingle(); if (error) throw error; return data as FloorPlan | null }
 export async function saveFloorPlan(propertyId: string, levelId: string, path: string, width: number, height: number): Promise<FloorPlan> { const { data, error } = await supabase.from('floor_plans').upsert({ property_id: propertyId, level_id: levelId, storage_path: path, width, height }, { onConflict: 'level_id' }).select('*').single(); return checked(data, error) as FloorPlan }
 export async function listRooms(propertyId: string): Promise<Room[]> { const { data, error } = await supabase.from('rooms').select('*').eq('property_id', propertyId).order('sort_order'); return checked(data, error) as Room[] }
 export async function addRoom(value: Pick<Room, 'property_id' | 'level_id' | 'name' | 'sort_order' | 'space_type' | 'category' | 'height'>): Promise<Room> { const { data, error } = await supabase.from('rooms').insert(value).select('*').single(); return checked(data, error) as Room }
+export async function restoreRoom(room: Room): Promise<void> { const { error } = await supabase.from('rooms').insert({ id: room.id, property_id: room.property_id, level_id: room.level_id, name: room.name, description: room.description, sort_order: room.sort_order, space_type: room.space_type, category: room.category, height: room.height }); if (error) throw error }
 export async function duplicateRoom(room: Room): Promise<Room> { return addRoom({ property_id: room.property_id, level_id: room.level_id, name: `${room.name} copy`.slice(0, 80), sort_order: room.sort_order + 1, space_type: room.space_type, category: room.category, height: room.height }) }
 export async function updateRoom(id: string, patch: Pick<Room, 'name' | 'description'>): Promise<void> { const { error } = await supabase.from('rooms').update(patch).eq('id', id); if (error) throw error }
 export async function updateSpace(id: string, patch: Partial<Pick<Room, 'name' | 'description' | 'space_type' | 'category' | 'height' | 'sort_order'>>): Promise<void> { const { error } = await supabase.from('rooms').update(patch).eq('id', id); if (error) throw error }

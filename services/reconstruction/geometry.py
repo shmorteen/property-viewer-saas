@@ -13,8 +13,9 @@ from typing import Any
 
 import numpy as np
 import trimesh
-from shapely.geometry import Polygon
-from shapely.ops import triangulate
+from shapely.geometry import Polygon, Point
+from shapely.ops import triangulate, unary_union
+from shapely.geometry import LineString
 
 
 def _world_point(point: dict, width: float, depth: float) -> tuple[float, float]:
@@ -24,8 +25,64 @@ def _world_point(point: dict, width: float, depth: float) -> tuple[float, float]
     return ((x - 0.5) * width, (0.5 - y) * depth)
 
 
+def _add_wall(scene: trimesh.Scene, start: tuple[float, float], end: tuple[float, float],
+              elevation: float, height: float, thickness: float, name: str,
+              openings: list[dict] | None = None) -> None:
+    """Construct solid wall panels around normalized horizontal openings."""
+    delta = np.array(end) - np.array(start)
+    length = float(np.linalg.norm(delta))
+    if length < .01:
+        raise ValueError(f"Zero-length wall {name}")
+    spans = []
+    cursor = 0.0
+    for opening in sorted(openings or [], key=lambda item: float(item['start'])):
+        left, right = float(opening['start']), float(opening['end'])
+        sill = float(opening.get('sill', 0))
+        opening_height = float(opening['height'])
+        if left < .02 or right > .98 or left <= cursor + .005 or right <= left or sill < 0 or sill + opening_height > height + 1e-6:
+            raise ValueError(f"Invalid or overlapping opening on wall {name}")
+        spans.append((cursor, left, 0.0, height))
+        if sill > .001:
+            spans.append((left, right, 0.0, sill))
+        top = sill + opening_height
+        if top < height - .001:
+            spans.append((left, right, top, height))
+        cursor = right
+    spans.append((cursor, 1.0, 0.0, height))
+    angle = math.atan2(-delta[1], delta[0])
+    for index, (left, right, bottom, top) in enumerate(spans):
+        if right - left < .0001 or top - bottom < .0001:
+            continue
+        panel = trimesh.creation.box(extents=[length * (right - left), top - bottom, thickness])
+        panel.apply_transform(trimesh.transformations.rotation_matrix(angle, [0, 1, 0]))
+        center = np.array(start) + delta * ((left + right) / 2)
+        panel.apply_translation([center[0], elevation + (top + bottom) / 2, center[1]])
+        panel.visual.vertex_colors = np.tile([230, 235, 230, 255], (len(panel.vertices), 1))
+        scene.add_geometry(panel, node_name=f"{name}_{index}", geom_name=f"{name}_{index}")
+
+
+def _legacy_walls(polygons: list[dict], rooms: list[dict]) -> dict[str, list[tuple[tuple[float, float], tuple[float, float]]]]:
+    """Dissolve exact shared boundaries so older independent polygons do not double walls."""
+    indoor = {room['id']: room for room in rooms if room.get('category') != 'outdoor'}
+    by_level: dict[str, list[LineString]] = {}
+    for polygon in polygons:
+        room = indoor.get(polygon['room_id'])
+        if room:
+            coordinates = [(float(p['x']), float(p['y'])) for p in polygon['points']]
+            by_level.setdefault(room['level_id'], []).append(LineString(coordinates + coordinates[:1]))
+    result: dict[str, list[tuple[tuple[float, float], tuple[float, float]]]] = {}
+    for level_id, lines in by_level.items():
+        union = unary_union(lines)
+        merged = list(union.geoms) if hasattr(union, 'geoms') else [union]
+        result[level_id] = []
+        for line in merged:
+            coordinates = list(line.coords)
+            result[level_id].extend((a, b) for a, b in zip(coordinates, coordinates[1:]) if a != b)
+    return result
+
+
 def build_model(property_row: dict, levels: list[dict], rooms: list[dict],
-                polygons: list[dict], media: list[dict]) -> tuple[bytes, bytes]:
+                polygons: list[dict], media: list[dict], layout_graphs: list[dict] | None = None) -> tuple[bytes, bytes]:
     width = float(property_row.get("layout_width_m") or 12)
     if not 2 <= width <= 100:
         raise ValueError("Building width must be between 2 and 100 metres")
@@ -69,20 +126,6 @@ def build_model(property_row: dict, levels: list[dict], rooms: list[dict],
         floor_color = [140, 187, 175, 255] if room.get("category") == "outdoor" else [229, 222, 207, 255]
         floor_mesh.visual.vertex_colors = np.tile(floor_color, (len(floor_mesh.vertices), 1))
         scene.add_geometry(floor_mesh, node_name=f"room_{room['id']}", geom_name=f"room_{room['id']}")
-        if room.get("category") != "outdoor":
-            for index, (start, end) in enumerate(zip(coords, coords[1:] + coords[:1])):
-                delta = np.array(end) - np.array(start)
-                length = float(np.linalg.norm(delta))
-                if length < 0.01:
-                    continue
-                wall = trimesh.creation.box(extents=[length, height, 0.10])
-                angle = math.atan2(-delta[1], delta[0])
-                wall.apply_transform(trimesh.transformations.rotation_matrix(angle, [0, 1, 0]))
-                wall.apply_translation([(start[0] + end[0]) / 2, elevation + height / 2,
-                                        (start[1] + end[1]) / 2])
-                wall.visual.vertex_colors = np.tile([230, 235, 230, 255], (len(wall.vertices), 1))
-                scene.add_geometry(wall, node_name=f"wall_{room['id']}_{index}",
-                                   geom_name=f"wall_{room['id']}_{index}")
         center = shape.representative_point()  # Always inside concave rooms.
         photos = sorted(media_by_room.get(room["id"], []), key=lambda item: item.get("sort_order", 0))
         room_records.append({
@@ -98,12 +141,51 @@ def build_model(property_row: dict, levels: list[dict], rooms: list[dict],
         })
     if not room_records:
         raise ValueError("Draw at least one room area before generating a 3D model")
+    graph_by_level = {row['level_id']: row['graph'] for row in layout_graphs or []}
+    wall_records: list[dict] = []
+    room_level = {room['id']: room['level_id'] for room in rooms}
+    legacy = _legacy_walls([p for p in polygons if p.get('level_id', room_level.get(p['room_id'])) not in graph_by_level], rooms)
+    for level in levels:
+        level_id = level['id']
+        depth = width * float(level['canvas_height']) / float(level['canvas_width'])
+        elevation = float(level['elevation'])
+        graph = graph_by_level.get(level_id)
+        if graph and graph.get('walls'):
+            vertices = {v['id']: v for v in graph['vertices']}
+            room_shapes = {p['room_id']: Polygon([(v['x'], v['y']) for v in p['points']])
+                           for p in polygons if p.get('level_id', room_level.get(p['room_id'])) == level_id}
+            for wall in graph['walls']:
+                if wall['kind'] == 'virtual':
+                    continue
+                start = _world_point(vertices[wall['a']], width, depth)
+                end = _world_point(vertices[wall['b']], width, depth)
+                attached = [o for o in graph.get('openings', []) if o['wall_id'] == wall['id']]
+                a, b = vertices[wall['a']], vertices[wall['b']]
+                dx, dy = float(b['x']) - float(a['x']), float(b['y']) - float(a['y'])
+                scale = math.hypot(dx, dy)
+                mid = ((float(a['x']) + float(b['x'])) / 2, (float(a['y']) + float(b['y'])) / 2)
+                left = Point(mid[0] - dy / scale * .0001, mid[1] + dx / scale * .0001)
+                right = Point(mid[0] + dy / scale * .0001, mid[1] - dx / scale * .0001)
+                left_room = next((rid for rid, shape in room_shapes.items() if shape.contains(left)), None)
+                right_room = next((rid for rid, shape in room_shapes.items() if shape.contains(right)), None)
+                name = f"wall_{wall['id']}"
+                _add_wall(scene, start, end, elevation, float(wall['height']), float(wall['thickness']), name, attached)
+                wall_records.append({'id': wall['id'], 'level_id': level_id, 'kind': wall['kind'],
+                                     'start': list(start), 'end': list(end), 'left_space_id': left_room,
+                                     'right_space_id': right_room,
+                                     'openings': [{'id': o['id'], 'type': o['type'], 'start': o['start'],
+                                                   'end': o['end'], 'swing': o.get('swing')} for o in attached]})
+        else:
+            for index, (start, end) in enumerate(legacy.get(level_id, [])):
+                a = _world_point({'x': start[0], 'y': start[1]}, width, depth)
+                b = _world_point({'x': end[0], 'y': end[1]}, width, depth)
+                _add_wall(scene, a, b, elevation, 2.7, .10, f"wall_legacy_{level_id}_{index}")
     manifest = {
-        "schema_version": 1, "property_id": property_row["id"], "units": "metres",
+        "schema_version": 2, "property_id": property_row["id"], "units": "metres",
         "layout_width_m": width,
         "levels": [{"id": level["id"], "name": level["name"], "elevation": float(level["elevation"])}
                    for level in levels],
-        "rooms": room_records,
+        "rooms": room_records, "walls": wall_records,
     }
     glb = scene.export(file_type="glb")
     if not isinstance(glb, bytes) or len(glb) < 100:

@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Bath, BedDouble, Building2, ChevronLeft, ChevronRight, MapPin } from 'lucide-react'
 import { FloorPlanCanvas } from '../components/FloorPlanCanvas'
 import { Button, Notice, Spinner } from '../components/ui'
-import { getProperty, getPublicTour, getSignedModel, getTour, listFloorPlans, listLevelPolygons, listLevels, listMedia, listOpenings, listRooms, listStairs, signedUrl } from '../lib/data'
+import { getLayoutGraph, getProperty, getPublicTour, getSignedModel, getTour, listFloorPlans, listLevelPolygons, listLevels, listMedia, listOpenings, listRooms, listStairs, signedUrl } from '../lib/data'
 import { errorMessage } from '../lib/supabase'
 import type { Level, ModelScene, TourPayload } from '../lib/types'
 import { useApp } from '../context'
@@ -22,11 +22,12 @@ async function privatePayload(id: string, organization: NonNullable<ReturnType<t
     organization.logo_path ? signedUrl('organization-branding', organization.logo_path) : Promise.resolve(''),
   ])
   const media = await Promise.all(rawMedia.map(async item => ({ ...item, url: await signedUrl('room-photos', item.storage_path) })))
+  const layout_graphs = await Promise.all(levels.filter(level => level.geometry_mode === 'topology').map(async level => ({ level_id: level.id, graph: await getLayoutGraph(level.id, id) })))
   return {
     property, organization: { ...organization, logo_url: logoUrl }, levels, floor_plans: resolvedFloors,
     floor_plan: resolvedFloors.find(floor => floor.level_id === levels[0]?.id) || resolvedFloors[0] || null,
     rooms: rooms.map(room => ({ ...room, media: media.filter(item => item.room_id === room.id) })),
-    polygons, openings, stairs, model,
+    polygons, openings, layout_graphs, stairs, model,
     tour: tour || { id: '', property_id: id, slug: '', published: false, published_at: null, created_at: '' },
   }
 }
@@ -63,7 +64,7 @@ export function TourPage({ preview = false }: { preview?: boolean }) {
     fetch(payload.model.scene_url, { signal: controller.signal })
       .then(response => { if (!response.ok) throw new Error('Could not download 3D scene'); return response.json() })
       .then((scene: ModelScene) => {
-        if (scene.property_id !== payload.property.id || scene.schema_version !== 1) throw new Error('Invalid 3D scene')
+        if (scene.property_id !== payload.property.id || ![1, 2].includes(scene.schema_version)) throw new Error('Invalid 3D scene')
         setModelScene(scene)
       })
       .catch(e => { if (e.name !== 'AbortError') setModelError(errorMessage(e)) })
@@ -79,6 +80,7 @@ export function TourPage({ preview = false }: { preview?: boolean }) {
   const photos = activeRoom?.media || []
   const visiblePolygons = payload?.polygons.filter(poly => poly.level_id === activeLevel?.id) || []
   const visibleOpenings = payload?.openings?.filter(opening => visibleRooms.some(room => room.id === opening.space_id)) || []
+  const graph = payload?.layout_graphs?.find(item => item.level_id === activeLevel?.id)?.graph
   const floor = payload?.floor_plans?.find(item => item.level_id === activeLevel?.id) || (levels.length === 1 ? payload?.floor_plan : null)
   const stair = payload?.stairs?.find(item => item.space_id === activeRoom?.id)
   const stairDestination = levels.find(level => level.id === stair?.destination_level_id)
@@ -89,7 +91,7 @@ export function TourPage({ preview = false }: { preview?: boolean }) {
   }
   const plan = <FloorPlanCanvas url={floor?.url || null} imageWidth={floor?.width || activeLevel?.canvas_width || 1200}
     imageHeight={floor?.height || activeLevel?.canvas_height || 900} rooms={visibleRooms} polygons={visiblePolygons}
-    openings={visibleOpenings} selectedRoomId={activeRoom?.id || null} selectedPolygonId={null}
+    openings={visibleOpenings} topology={graph} selectedRoomId={activeRoom?.id || null} selectedPolygonId={null}
     draft={[]} drawing={false} editable={false} onSelectPolygon={poly => selectRoom(poly.room_id)}/>
 
   return <div className={preview ? '' : 'min-h-screen bg-cream'}>
