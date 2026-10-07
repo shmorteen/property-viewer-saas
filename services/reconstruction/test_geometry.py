@@ -2,8 +2,69 @@ import json
 
 import trimesh
 import pytest
+from shapely.geometry import Point, Polygon
 
-from geometry import _end_cap, _panel_mesh, build_model
+from geometry import _end_cap, _legacy_walls, _panel_mesh, build_model
+
+
+@pytest.mark.parametrize('kind', ['straight', 'l_shaped', 'u_shaped', 'spiral'])
+def test_stair_features_are_open_flights_with_destination_slab_hole(kind):
+    prop = {'id': 'stair-property', 'layout_width_m': 12}
+    levels = [{'id': 'ground', 'name': 'Ground', 'elevation': 0, 'canvas_width': 1200, 'canvas_height': 900},
+              {'id': 'upper', 'name': 'Upper', 'elevation': 3, 'canvas_width': 1200, 'canvas_height': 900}]
+    rooms = [{'id': 'lower-room', 'level_id': 'ground', 'name': 'Lower', 'category': 'indoor', 'height': 2.7},
+             {'id': 'upper-room', 'level_id': 'upper', 'name': 'Upper', 'category': 'indoor', 'height': 2.7}]
+    outline = [{'x':.1,'y':.1},{'x':.9,'y':.1},{'x':.9,'y':.9},{'x':.1,'y':.9}]
+    polygons = [{'room_id':room['id'], 'level_id':room['level_id'], 'points':outline} for room in rooms]
+    stair = {'id':'stair-one','source_level_id':'ground','destination_level_id':'upper','type':kind,
+             'footprint':[{'x':.4,'y':.3},{'x':.6,'y':.3},{'x':.6,'y':.7},{'x':.4,'y':.7}],
+             'width_m':1.1,'total_rise_m':3,'direction':'north','step_count':16,
+             'railing':True,'railing_height_m':1.05}
+    graphs = [{'level_id':'ground','graph':{'walls':[],'vertices':[],'stairs':[stair]}},
+              {'level_id':'upper','graph':{'walls':[],'vertices':[],'stairs':[]}}]
+    glb, encoded = build_model(prop,levels,rooms,polygons,[],graphs)
+    manifest = json.loads(encoded)
+    scene = trimesh.load(file_obj=__import__('io').BytesIO(glb), file_type='glb', force='scene')
+    names = list(scene.graph.nodes_geometry)
+    steps = [name for name in names if name.startswith('stair_stair-one_step_')]
+    assert len(steps) == 16
+    assert not any(name.startswith('wall_') for name in names), 'Stair footprint must not synthesize walls'
+    assert manifest['stairs'][0]['rise_m'] == 3
+    assert manifest['stairs'][0]['type'] == kind
+    heights = [scene.geometry[name].bounds[1,1] for name in steps]
+    assert min(heights) > 0 and max(heights) == pytest.approx(3)
+    if kind in ('l_shaped','u_shaped'):
+        landing = scene.geometry['stair_stair-one_landing']
+        assert landing.bounds[1,1] == pytest.approx(1.5)
+    rails = [scene.geometry[name] for name in names if name.startswith('stair_rail_stair-one_')]
+    assert rails and all(mesh.extents[1] <= 1.05 + 1e-6 for mesh in rails)
+    upper_floor = scene.geometry['room_upper-room']
+    outer_area = Polygon([(p['x'] * 12, p['y'] * 9) for p in outline]).area
+    stair_area = Polygon([(p['x'] * 12, p['y'] * 9) for p in stair['footprint']]).area
+    assert upper_floor.area == pytest.approx(outer_area - stair_area, rel=1e-4)
+    for face in upper_floor.faces:
+        triangle = Polygon([(upper_floor.vertices[index][0], upper_floor.vertices[index][2]) for index in face])
+        assert not triangle.contains(Point(0,0)), 'Upper slab must leave the stairwell open'
+
+
+def test_legacy_stair_polygon_is_adapted_without_inferred_perimeter_walls():
+    levels = [{'id':'lower','name':'Lower','elevation':0,'canvas_width':1200,'canvas_height':900},
+              {'id':'upper','name':'Upper','elevation':3,'canvas_width':1200,'canvas_height':900}]
+    rooms = [{'id':'living','level_id':'lower','name':'Living','category':'indoor','height':2.7},
+             {'id':'old-stair','level_id':'lower','name':'Stairs','space_type':'stairs','category':'indoor','height':2.7},
+             {'id':'above','level_id':'upper','name':'Above','category':'indoor','height':2.7}]
+    polygons = [{'room_id':'living','level_id':'lower','points':[{'x':.1,'y':.1},{'x':.4,'y':.1},{'x':.4,'y':.9},{'x':.1,'y':.9}]},
+                {'room_id':'old-stair','level_id':'lower','points':[{'x':.4,'y':.3},{'x':.6,'y':.3},{'x':.6,'y':.7},{'x':.4,'y':.7}]},
+                {'room_id':'above','level_id':'upper','points':[{'x':.1,'y':.1},{'x':.9,'y':.1},{'x':.9,'y':.9},{'x':.1,'y':.9}]}]
+    walls = _legacy_walls(polygons,rooms)['lower']
+    assert not any(abs(a[0]-.4)<1e-7 and abs(b[0]-.4)<1e-7 and .3 <= (a[1]+b[1])/2 <= .7 for a,b in walls)
+    glb, encoded = build_model({'id':'legacy-stair','layout_width_m':12},levels,rooms,polygons,[],None,
+                               [{'id':'connection','space_id':'old-stair','destination_level_id':'upper','stair_type':'straight'}])
+    manifest = json.loads(encoded)
+    scene = trimesh.load(file_obj=__import__('io').BytesIO(glb),file_type='glb',force='scene')
+    assert manifest['stairs'][0]['id'] == 'connection'
+    assert not manifest['stairs_needing_review']
+    assert 'room_old-stair' not in scene.graph.nodes_geometry
 
 
 def test_multi_room_glb_preserves_ids_and_scale():

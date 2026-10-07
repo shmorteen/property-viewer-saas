@@ -30,22 +30,24 @@ function Model({ url, scene, activeRoomId, activeLevelId, onSelectRoom, resetTok
   const roomIds = useMemo(() => new Set(scene.rooms.map(room => room.id)), [scene])
   const wallById = useMemo(() => new Map((scene.walls || []).map(wall => [wall.id, wall])), [scene])
   const edgeByNode = useMemo(() => (scene.site_edges || []).map(edge => ({ prefix: `edge_${edge.id}_`, edge })), [scene])
+  const stairByNode = useMemo(() => (scene.stairs || []).map(stair => ({ prefixes: [`stair_${stair.id}_`, `stair_rail_${stair.id}_`], stair })), [scene])
 
   useEffect(() => {
     object.traverse(child => {
       if (!(child instanceof Mesh)) return
       const wall = child.name.startsWith('wall_') ? wallById.get(child.name.slice(5, 41)) : undefined
       const edge = child.name.startsWith('edge_') ? edgeByNode.find(item => child.name.startsWith(item.prefix))?.edge : undefined
+      const stair = child.name.startsWith('stair_') ? stairByNode.find(item => item.prefixes.some(prefix => child.name.startsWith(prefix)))?.stair : undefined
       const roomId = child.name.startsWith('room_') ? child.name.slice(5) :
         edge?.room_id || wall?.left_space_id || wall?.right_space_id || (child.name.startsWith('wall_') ? child.name.slice(5, 41) : '')
       const room = scene.rooms.find(item => item.id === roomId)
-      child.visible = edge ? (!activeLevelId || edge.level_id === activeLevelId) : wall ? (!activeLevelId || wall.level_id === activeLevelId) : child.name.startsWith('wall_legacy_') ? (!activeLevelId || child.name.startsWith(`wall_legacy_${activeLevelId}_`)) : Boolean(room && (!activeLevelId || room.level_id === activeLevelId))
+      child.visible = stair ? (!activeLevelId || stair.source_level_id === activeLevelId || stair.destination_level_id === activeLevelId) : edge ? (!activeLevelId || edge.level_id === activeLevelId) : wall ? (!activeLevelId || wall.level_id === activeLevelId) : child.name.startsWith('wall_legacy_') ? (!activeLevelId || child.name.startsWith(`wall_legacy_${activeLevelId}_`)) : Boolean(room && (!activeLevelId || room.level_id === activeLevelId))
       if (child.material instanceof MeshStandardMaterial) {
         child.material.color = new Color(roomId === activeRoomId ? '#58b6a1' :
-          edge ? '#9eaeb0' : child.name.startsWith('wall_') ? '#e6ebe6' : room?.category === 'outdoor' ? '#8cbbaf' : '#e5decf')
+          stair ? child.name.startsWith('stair_rail_') ? '#74788b' : '#b5ab97' : edge ? '#9eaeb0' : child.name.startsWith('wall_') ? '#e6ebe6' : room?.category === 'outdoor' ? '#8cbbaf' : '#e5decf')
       }
     })
-  }, [object, scene, activeRoomId, activeLevelId, wallById, edgeByNode])
+  }, [object, scene, activeRoomId, activeLevelId, wallById, edgeByNode, stairByNode])
 
   useEffect(() => {
     const room = scene.rooms.find(item => item.id === activeRoomId)

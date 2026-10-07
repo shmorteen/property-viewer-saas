@@ -3,16 +3,20 @@ import type { Point } from './types'
 
 export type Vertex = Point & { id: string }
 export type Wall = { id: string; a: string; b: string; kind: 'exterior' | 'interior' | 'virtual'; thickness: number; height: number; fillet_id?: string }
-export type OpeningPreset = 'narrow' | 'standard' | 'wide' | 'custom'
-export type TopologyOpening = { id: string; wall_id: string; type: 'standard_door' | 'double_door' | 'standard_window' | 'wide_window' | 'entrance'; start: number; end: number; height: number; sill: number; swing: -1 | 1; preset?: OpeningPreset; width_m?: number }
+export type OpeningPreset = 'narrow' | 'standard' | 'wide' | 'double' | 'custom'
+export type TopologyOpening = { id: string; wall_id: string; type: 'standard_door' | 'double_door' | 'standard_window' | 'wide_window' | 'entrance'; start: number; end: number; height: number; sill: number; swing: -1 | 1; preset?: OpeningPreset; width_m?: number; path_id?: string }
+export type StairKind = 'straight' | 'l_shaped' | 'u_shaped' | 'spiral'
+export type StairDirection = 'north' | 'east' | 'south' | 'west'
+export type StairFeature = { id: string; source_level_id: string; destination_level_id: string; type: StairKind; footprint: Point[]; width_m: number; total_rise_m: number; direction: StairDirection; step_count: number; railing: boolean; railing_height_m: number; legacy_space_id?: string }
 export type EdgeBehavior = 'wall' | 'open' | 'railing' | 'parapet'
 export type SiteEdge = { room_id: string; segment_index: number; behavior: EdgeBehavior; height: number; thickness: number }
 export type RoomSeed = { room_id: string; point: Point }
-export type LayoutGraph = { property_boundary: Point[]; building_boundary: string[]; vertices: Vertex[]; walls: Wall[]; rooms: RoomSeed[]; openings: TopologyOpening[]; site_edges: SiteEdge[] }
+export type LayoutGraph = { property_boundary: Point[]; building_boundary: string[]; vertices: Vertex[]; walls: Wall[]; rooms: RoomSeed[]; openings: TopologyOpening[]; site_edges: SiteEdge[]; stairs?: StairFeature[] }
 export type Face = { ids: string[]; points: Point[]; key: string; area: number; room_id?: string }
 
-export const emptyGraph = (): LayoutGraph => ({ property_boundary: [], building_boundary: [], vertices: [], walls: [], rooms: [], openings: [], site_edges: [] })
-export const OPENING_WIDTHS_M = { door: { narrow: .75, standard: .9, wide: 1.2 }, window: { narrow: .6, standard: 1.2, wide: 1.8 } } as const
+export const emptyGraph = (): LayoutGraph => ({ property_boundary: [], building_boundary: [], vertices: [], walls: [], rooms: [], openings: [], site_edges: [], stairs: [] })
+export const OPENING_WIDTHS_M = { door: { narrow: .75, standard: .9, wide: 1.1, double: 1.5 }, window: { narrow: .6, standard: 1.2, wide: 1.8 } } as const
+export const OPENING_WIDTH_BOUNDS_M = { door: { min: .6, max: 2 }, window: { min: .35, max: 3 } } as const
 export type SnapOptions = { vertex?: boolean; wall?: boolean; grid?: boolean }
 const eps = 1e-7
 const point = (graph: LayoutGraph, id: string) => graph.vertices.find(v => v.id === id)!
@@ -82,6 +86,7 @@ export function preserveOpeningWidths(graph: LayoutGraph, layoutWidthM: number, 
   return { ...graph, openings: graph.openings.map(opening => {
     const wall = graph.walls.find(item => item.id === opening.wall_id)
     if (!wall || !opening.width_m) return opening
+    if (opening.type === 'entrance' || opening.path_id && graph.openings.filter(item => item.path_id === opening.path_id).length > 1) return { ...opening, width_m: (opening.end - opening.start) * wallLengthM(graph, wall, layoutWidthM, aspect) }
     const placement = openingAt(graph, wall, (opening.start + opening.end) / 2, opening.width_m, layoutWidthM, aspect)
     if (!placement) throw new Error('A wall is too short for one of its openings. Move or resize the opening first.')
     return { ...opening, ...placement }
@@ -154,10 +159,18 @@ function splitAt(graph: LayoutGraph, snap: Snap): string {
   if (snap.kind !== 'wall') throw new Error('A partition must start and end on an existing wall or vertex.')
   const index = graph.walls.findIndex(w => w.id === snap.id)
   const old = graph.walls[index]
-  if (graph.openings.some(o => o.wall_id === old.id)) throw new Error('This wall has openings. Remove or relocate them before splitting it.')
+  const position = snap.t ?? wallParameter(graph, old, snap.point)
   const id = crypto.randomUUID()
   graph.vertices.push({ ...snap.point, id })
-  graph.walls.splice(index, 1, { ...old, b: id }, { ...old, id: crypto.randomUUID(), a: id })
+  const secondId = crypto.randomUUID()
+  graph.walls.splice(index, 1, { ...old, b: id }, { ...old, id: secondId, a: id })
+  graph.openings = graph.openings.flatMap(opening => {
+    if (opening.wall_id !== old.id) return [opening]
+    const left = opening.start < position - 1e-6 ? { ...opening, start: opening.start / position, end: Math.min(opening.end, position) / position } : null
+    const right = opening.end > position + 1e-6 ? { ...opening, id: left ? crypto.randomUUID() : opening.id, wall_id: secondId, start: Math.max(opening.start, position) / (1 - position) - position / (1 - position), end: (opening.end - position) / (1 - position) } : null
+    if (left && right) { const pathId = opening.path_id || opening.id; left.path_id = pathId; right.path_id = pathId }
+    return [left, right].filter((item): item is TopologyOpening => item !== null)
+  })
   if (old.kind === 'exterior') {
     const boundaryIndex = graph.building_boundary.findIndex((vertex, i) => vertex === old.a && graph.building_boundary[(i + 1) % graph.building_boundary.length] === old.b)
     if (boundaryIndex >= 0) graph.building_boundary.splice(boundaryIndex + 1, 0, id)
@@ -260,16 +273,69 @@ export function validateGraph(graph: LayoutGraph): string | null {
   if (graph.rooms.some(r => regions.filter(f => f.room_id === r.room_id).length !== 1)) return 'A room lost its enclosed area. Move its partition or remove the room assignment first.'
   for (const o of graph.openings) {
     const w = graph.walls.find(item => item.id === o.wall_id)
-    if (!w || o.start < .02 || o.end > .98 || o.end - o.start < .02 || o.start >= o.end) return 'Opening must fit within one existing wall.'
+    if (!w || o.start < (o.type === 'entrance' || o.path_id ? 0 : .02) || o.end > (o.type === 'entrance' || o.path_id ? 1 : .98) || o.end - o.start < .02 || o.start >= o.end) return 'Opening must fit on an existing wall.'
     if (!['standard_door', 'double_door', 'standard_window', 'wide_window', 'entrance'].includes(o.type) || !Number.isFinite(o.height) || o.height <= 0 || !Number.isFinite(o.sill) || o.sill < 0 || o.sill + o.height > w.height + 1e-6) return 'Opening height must fit within its wall.'
     if (o.width_m !== undefined && (!Number.isFinite(o.width_m) || o.width_m <= 0)) return 'Opening width must be positive.'
     if (graph.openings.some(other => other !== o && other.wall_id === o.wall_id && o.start < other.end + .01 && other.start < o.end + .01)) return 'Openings on the same wall overlap.'
   }
   if ((graph.site_edges || []).some(edge => !Number.isInteger(edge.segment_index) || edge.segment_index < 0 || !['wall', 'open', 'railing', 'parapet'].includes(edge.behavior) || !Number.isFinite(edge.height) || edge.height < 0 || !Number.isFinite(edge.thickness) || edge.thickness <= 0)) return 'A site edge has invalid boundary settings.'
+  for (const stair of graph.stairs || []) {
+    if (!stair.id || !stair.source_level_id || !stair.destination_level_id || stair.source_level_id === stair.destination_level_id || !['straight','l_shaped','u_shaped','spiral'].includes(stair.type) || !['north','east','south','west'].includes(stair.direction) || !validLayoutPolygon(stair.footprint) || stair.footprint.length !== 4 || !Number.isFinite(stair.width_m) || stair.width_m < .6 || stair.width_m > 3 || !Number.isFinite(stair.total_rise_m) || stair.total_rise_m <= 0 || stair.total_rise_m > 10 || !Number.isInteger(stair.step_count) || stair.step_count < 3 || stair.step_count > 60 || !Number.isFinite(stair.railing_height_m) || stair.railing_height_m < .7 || stair.railing_height_m > 1.5) return 'Stair dimensions or level connection are invalid.'
+    if (stair.footprint.some(p => !contains(p, building))) return 'Stair footprint must stay inside the building.'
+  }
   return null
 }
 export function wallPoint(graph: LayoutGraph, wall: Wall, t: number): Point { const a = point(graph, wall.a), b = point(graph, wall.b); return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t } }
 export function wallParameter(graph: LayoutGraph, wall: Wall, p: Point): number { return segmentDistance(p, point(graph, wall.a), point(graph, wall.b)).t }
+export type WallPosition = { wall: Wall; t: number }
+export type EntranceSpan = { wall: Wall; start: number; end: number }
+/** Find the shortest continuous physical-wall path between two clicked positions. */
+export function entranceSpans(graph: LayoutGraph, from: WallPosition, to: WallPosition, layoutWidthM: number, aspect: number): EntranceSpan[] | null {
+  if (from.wall.kind === 'virtual' || to.wall.kind === 'virtual') return null
+  if (from.wall.id === to.wall.id) {
+    const start = Math.min(from.t, to.t), end = Math.max(from.t, to.t)
+    return end - start >= .02 ? [{ wall: from.wall, start, end }] : null
+  }
+  const length = (wall: Wall) => wallLengthM(graph, wall, layoutWidthM, aspect)
+  const route = (start: string, finish: string): { walls: Wall[]; length: number; vertices: string[] } | null => {
+    const distances = new Map<string, number>([[start, 0]])
+    const previous = new Map<string, { vertex: string; wall: Wall }>()
+    const visited = new Set<string>()
+    while (true) {
+      const current = [...distances].filter(([id]) => !visited.has(id)).sort((a, b) => a[1] - b[1])[0]
+      if (!current) return null
+      const [id, distance] = current
+      if (id === finish) {
+        const walls: Wall[] = [], vertices = [finish]
+        let cursor = finish
+        while (cursor !== start) { const step = previous.get(cursor)!; walls.unshift(step.wall); vertices.unshift(step.vertex); cursor = step.vertex }
+        return { walls, length: distance, vertices }
+      }
+      visited.add(id)
+      for (const wall of graph.walls) {
+        if (wall.kind === 'virtual' || wall.id === from.wall.id || wall.id === to.wall.id || (wall.a !== id && wall.b !== id)) continue
+        const next = wall.a === id ? wall.b : wall.a, candidate = distance + length(wall)
+        if (candidate < (distances.get(next) ?? Infinity)) { distances.set(next, candidate); previous.set(next, { vertex: id, wall }) }
+      }
+    }
+  }
+  const candidates: { spans: EntranceSpan[]; length: number }[] = []
+  for (const first of [from.wall.a, from.wall.b]) for (const last of [to.wall.a, to.wall.b]) {
+    const middle = route(first, last)
+    if (!middle) continue
+    const spans: EntranceSpan[] = []
+    const firstSpan = first === from.wall.a ? { start: 0, end: from.t } : { start: from.t, end: 1 }
+    if (firstSpan.end - firstSpan.start >= .02) spans.push({ wall: from.wall, ...firstSpan })
+    for (let i = 0; i < middle.walls.length; i++) {
+      const wall = middle.walls[i]
+      spans.push({ wall, start: 0, end: 1 })
+    }
+    const lastSpan = last === to.wall.a ? { start: 0, end: to.t } : { start: to.t, end: 1 }
+    if (lastSpan.end - lastSpan.start >= .02) spans.push({ wall: to.wall, ...lastSpan })
+    if (spans.length) candidates.push({ spans, length: spans.reduce((sum, span) => sum + (span.end - span.start) * length(span.wall), 0) })
+  }
+  return candidates.sort((a, b) => a.length - b.length)[0]?.spans || null
+}
 export function faceCenter(face: Face): Point {
   const xs = face.points.map(p => p.x), ys = face.points.map(p => p.y)
   const minX = Math.min(...xs), minY = Math.min(...ys), dx = Math.max(...xs) - minX, dy = Math.max(...ys) - minY

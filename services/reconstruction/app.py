@@ -47,6 +47,10 @@ def process_job(db: Client, job: dict) -> None:
     for level in levels:
         layout_graphs.extend(_rows(db, "layout_graphs", "level_id", level["id"]))
     rooms = _rows(db, "rooms", "property_id", property_id)
+    stair_connections: list[dict] = []
+    for room in rooms:
+        if room.get('space_type') == 'stairs':
+            stair_connections.extend(_rows(db, 'stair_connections', 'space_id', room['id']))
     polygons = _rows(db, "room_polygons", "level_id", levels[0]["id"]) if len(levels) == 1 else []
     if len(levels) != 1:
         for level in levels:
@@ -62,7 +66,7 @@ def process_job(db: Client, job: dict) -> None:
             photo["width"], photo["height"] = image_size(data)
         except Exception as exc:
             logger.warning("Could not inspect photo %s: %s", photo["id"], exc)
-    glb, manifest = build_model(property_row, levels, rooms, polygons, photos, layout_graphs)
+    glb, manifest = build_model(property_row, levels, rooms, polygons, photos, layout_graphs, stair_connections)
     progress(70)
     existing = db.table("property_models").select("version").eq("property_id", property_id).order("version", desc=True).limit(1).execute().data or []
     version = (existing[0]["version"] if existing else 0) + 1
