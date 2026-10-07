@@ -2,13 +2,18 @@ import { clamp, polygonArea, validLayoutPolygon } from './geometry'
 import type { Point } from './types'
 
 export type Vertex = Point & { id: string }
-export type Wall = { id: string; a: string; b: string; kind: 'exterior' | 'interior' | 'virtual'; thickness: number; height: number }
-export type TopologyOpening = { id: string; wall_id: string; type: 'standard_door' | 'double_door' | 'standard_window' | 'wide_window'; start: number; end: number; height: number; sill: number; swing: -1 | 1 }
+export type Wall = { id: string; a: string; b: string; kind: 'exterior' | 'interior' | 'virtual'; thickness: number; height: number; fillet_id?: string }
+export type OpeningPreset = 'narrow' | 'standard' | 'wide' | 'custom'
+export type TopologyOpening = { id: string; wall_id: string; type: 'standard_door' | 'double_door' | 'standard_window' | 'wide_window' | 'entrance'; start: number; end: number; height: number; sill: number; swing: -1 | 1; preset?: OpeningPreset; width_m?: number }
+export type EdgeBehavior = 'wall' | 'open' | 'railing' | 'parapet'
+export type SiteEdge = { room_id: string; segment_index: number; behavior: EdgeBehavior; height: number; thickness: number }
 export type RoomSeed = { room_id: string; point: Point }
-export type LayoutGraph = { property_boundary: Point[]; building_boundary: string[]; vertices: Vertex[]; walls: Wall[]; rooms: RoomSeed[]; openings: TopologyOpening[] }
+export type LayoutGraph = { property_boundary: Point[]; building_boundary: string[]; vertices: Vertex[]; walls: Wall[]; rooms: RoomSeed[]; openings: TopologyOpening[]; site_edges: SiteEdge[] }
 export type Face = { ids: string[]; points: Point[]; key: string; area: number; room_id?: string }
 
-export const emptyGraph = (): LayoutGraph => ({ property_boundary: [], building_boundary: [], vertices: [], walls: [], rooms: [], openings: [] })
+export const emptyGraph = (): LayoutGraph => ({ property_boundary: [], building_boundary: [], vertices: [], walls: [], rooms: [], openings: [], site_edges: [] })
+export const OPENING_WIDTHS_M = { door: { narrow: .75, standard: .9, wide: 1.2 }, window: { narrow: .6, standard: 1.2, wide: 1.8 } } as const
+export type SnapOptions = { vertex?: boolean; wall?: boolean; grid?: boolean }
 const eps = 1e-7
 const point = (graph: LayoutGraph, id: string) => graph.vertices.find(v => v.id === id)!
 const cross = (a: Point, b: Point, c: Point) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
@@ -51,14 +56,98 @@ export function createBuilding(graph: LayoutGraph, points: Point[]): LayoutGraph
 }
 export function footprint(graph: LayoutGraph): Point[] { return graph.building_boundary.map(id => point(graph, id)) }
 export type Snap = { point: Point; kind: 'vertex' | 'wall' | 'grid' | 'free'; id?: string; t?: number }
-export function snapToGraph(graph: LayoutGraph, raw: Point, width: number, height: number, allowGrid = true): Snap {
+export function snapToGraph(graph: LayoutGraph, raw: Point, width: number, height: number, allowGrid = true, options: SnapOptions = {}): Snap {
   const pixel = (p: Point) => Math.hypot((p.x - raw.x) * width, (p.y - raw.y) * height)
   const vertex = graph.vertices.map(v => ({ v, distance: pixel(v) })).sort((a, b) => a.distance - b.distance)[0]
-  if (vertex && vertex.distance <= 12) return { point: { x: vertex.v.x, y: vertex.v.y }, kind: 'vertex', id: vertex.v.id }
+  if (options.vertex !== false && vertex && vertex.distance <= 12) return { point: { x: vertex.v.x, y: vertex.v.y }, kind: 'vertex', id: vertex.v.id }
   const wall = graph.walls.map(w => ({ w, ...segmentDistance(raw, point(graph, w.a), point(graph, w.b)) })).map(item => ({ ...item, distance: pixel(item.projected) })).sort((a, b) => a.distance - b.distance)[0]
-  if (wall && wall.distance <= 10) return { point: wall.projected, kind: 'wall', id: wall.w.id, t: wall.t }
+  if (options.wall !== false && wall && wall.distance <= 10) return { point: wall.projected, kind: 'wall', id: wall.w.id, t: wall.t }
   const grid = { x: clamp(Math.round(raw.x / .025) * .025), y: clamp(Math.round(raw.y / .025) * .025) }
-  return allowGrid && pixel(grid) <= 8 ? { point: grid, kind: 'grid' } : { point: { x: clamp(raw.x), y: clamp(raw.y) }, kind: 'free' }
+  return allowGrid && options.grid !== false && pixel(grid) <= 8 ? { point: grid, kind: 'grid' } : { point: { x: clamp(raw.x), y: clamp(raw.y) }, kind: 'free' }
+}
+export function orthogonalPoint(previous: Point, raw: Point, width: number, height: number): Point {
+  return Math.abs(raw.x - previous.x) * width >= Math.abs(raw.y - previous.y) * height
+    ? { x: raw.x, y: previous.y } : { x: previous.x, y: raw.y }
+}
+export function wallLengthM(graph: LayoutGraph, wall: Wall, layoutWidthM: number, aspect: number): number {
+  const a = point(graph, wall.a), b = point(graph, wall.b)
+  return Math.hypot((b.x - a.x) * layoutWidthM, (b.y - a.y) * layoutWidthM * aspect)
+}
+export function openingAt(graph: LayoutGraph, wall: Wall, center: number, widthM: number, layoutWidthM: number, aspect: number): { start: number; end: number } | null {
+  const span = widthM / wallLengthM(graph, wall, layoutWidthM, aspect)
+  const start = center - span / 2, end = center + span / 2
+  return span >= .02 && start >= .02 && end <= .98 ? { start, end } : null
+}
+export function preserveOpeningWidths(graph: LayoutGraph, layoutWidthM: number, aspect: number): LayoutGraph {
+  return { ...graph, openings: graph.openings.map(opening => {
+    const wall = graph.walls.find(item => item.id === opening.wall_id)
+    if (!wall || !opening.width_m) return opening
+    const placement = openingAt(graph, wall, (opening.start + opening.end) / 2, opening.width_m, layoutWidthM, aspect)
+    if (!placement) throw new Error('A wall is too short for one of its openings. Move or resize the opening first.')
+    return { ...opening, ...placement }
+  }) }
+}
+/** Replace a degree-two exterior corner by tangent points and a connected circular arc. */
+export function filletCorner(source: LayoutGraph, vertexId: string, radiusM: number, layoutWidthM: number, aspect: number): LayoutGraph {
+  const graph = structuredClone(source)
+  const index = graph.building_boundary.indexOf(vertexId)
+  if (index < 0 || !Number.isFinite(radiusM) || radiusM <= 0) throw new Error('Select an exterior corner and a positive radius.')
+  const touching = graph.walls.filter(w => w.a === vertexId || w.b === vertexId)
+  if (touching.length !== 2 || touching.some(w => w.kind !== 'exterior')) throw new Error('Fillet is available on a building corner without a partition junction.')
+  const previousId = graph.building_boundary[(index - 1 + graph.building_boundary.length) % graph.building_boundary.length]
+  const nextId = graph.building_boundary[(index + 1) % graph.building_boundary.length]
+  const world = (v: Vertex) => ({ x: v.x * layoutWidthM, y: v.y * layoutWidthM * aspect })
+  const from = world(point(graph, previousId)), corner = world(point(graph, vertexId)), to = world(point(graph, nextId))
+  const va = { x: from.x - corner.x, y: from.y - corner.y }, vb = { x: to.x - corner.x, y: to.y - corner.y }
+  const la = Math.hypot(va.x, va.y), lb = Math.hypot(vb.x, vb.y)
+  const a = { x: va.x / la, y: va.y / la }, b = { x: vb.x / lb, y: vb.y / lb }
+  const angle = Math.acos(clamp(a.x * b.x + a.y * b.y, -1, 1))
+  if (angle < .12 || Math.PI - angle < .12) throw new Error('This corner is too sharp or straight for a stable fillet.')
+  const tangent = radiusM / Math.tan(angle / 2)
+  if (tangent > Math.min(la, lb) * .4) throw new Error('Radius is too large for the adjacent walls.')
+  // Keep openings at their original physical positions when a wall is trimmed.
+  // Only openings inside the trimmed portion need to be moved first.
+  for (const wall of touching) {
+    const oldLength = wallLengthM(graph, wall, layoutWidthM, aspect)
+    const newLength = oldLength - tangent
+    for (const opening of graph.openings.filter(item => item.wall_id === wall.id)) {
+      const offset = wall.a === vertexId ? tangent : 0
+      const start = (opening.start * oldLength - offset) / newLength
+      const end = (opening.end * oldLength - offset) / newLength
+      if (start < .02 || end > .98) throw new Error('Move the opening farther from this corner before rounding it.')
+      opening.start = start
+      opening.end = end
+      opening.width_m ??= (end - start) * newLength
+    }
+  }
+  const bisector = { x: a.x + b.x, y: a.y + b.y }, bisectorLength = Math.hypot(bisector.x, bisector.y)
+  const centerDistance = radiusM / Math.sin(angle / 2)
+  const center = { x: corner.x + bisector.x / bisectorLength * centerDistance, y: corner.y + bisector.y / bisectorLength * centerDistance }
+  const first = { x: corner.x + a.x * tangent, y: corner.y + a.y * tangent }
+  const last = { x: corner.x + b.x * tangent, y: corner.y + b.y * tangent }
+  const begin = Math.atan2(first.y - center.y, first.x - center.x)
+  const finish = Math.atan2(last.y - center.y, last.x - center.x)
+  const delta = Math.atan2(Math.sin(finish - begin), Math.cos(finish - begin))
+  let count = Math.max(2, Math.ceil(Math.abs(delta) / (Math.PI / 12)))
+  const trace = (steps: number) => Array.from({ length: steps + 1 }, (_, i) => {
+    const theta = begin + delta * i / steps
+    return { id: crypto.randomUUID(), x: clamp((center.x + Math.cos(theta) * radiusM) / layoutWidthM), y: clamp((center.y + Math.sin(theta) * radiusM) / (layoutWidthM * aspect)) }
+  })
+  let arc = trace(count)
+  while (count > 2 && arc.some((v, i) => i > 0 && Math.hypot(v.x - arc[i - 1].x, v.y - arc[i - 1].y) < .0055)) arc = trace(--count)
+  if (arc.some((v, i) => i > 0 && Math.hypot(v.x - arc[i - 1].x, v.y - arc[i - 1].y) < .005)) throw new Error('Radius is too small at this plan scale.')
+  const incoming = touching.find(w => w.a === previousId || w.b === previousId)!
+  const outgoing = touching.find(w => w.a === nextId || w.b === nextId)!
+  if (!incoming || !outgoing || incoming.id === outgoing.id) throw new Error('Corner walls are not connected as expected.')
+  if (incoming.a === vertexId) incoming.a = arc[0].id; else incoming.b = arc[0].id
+  if (outgoing.a === vertexId) outgoing.a = arc[count].id; else outgoing.b = arc[count].id
+  const filletId = crypto.randomUUID()
+  for (let i = 0; i < count; i++) graph.walls.push({ id: crypto.randomUUID(), a: arc[i].id, b: arc[i + 1].id, kind: 'exterior', thickness: (incoming.thickness + outgoing.thickness) / 2, height: Math.max(incoming.height, outgoing.height), fillet_id: filletId })
+  graph.vertices = [...graph.vertices.filter(v => v.id !== vertexId), ...arc]
+  graph.building_boundary.splice(index, 1, ...arc.map(v => v.id))
+  const problem = validateGraph(graph)
+  if (problem) throw new Error(problem)
+  return graph
 }
 function splitAt(graph: LayoutGraph, snap: Snap): string {
   if (snap.kind === 'vertex') return snap.id!
@@ -172,8 +261,11 @@ export function validateGraph(graph: LayoutGraph): string | null {
   for (const o of graph.openings) {
     const w = graph.walls.find(item => item.id === o.wall_id)
     if (!w || o.start < .02 || o.end > .98 || o.end - o.start < .02 || o.start >= o.end) return 'Opening must fit within one existing wall.'
+    if (!['standard_door', 'double_door', 'standard_window', 'wide_window', 'entrance'].includes(o.type) || !Number.isFinite(o.height) || o.height <= 0 || !Number.isFinite(o.sill) || o.sill < 0 || o.sill + o.height > w.height + 1e-6) return 'Opening height must fit within its wall.'
+    if (o.width_m !== undefined && (!Number.isFinite(o.width_m) || o.width_m <= 0)) return 'Opening width must be positive.'
     if (graph.openings.some(other => other !== o && other.wall_id === o.wall_id && o.start < other.end + .01 && other.start < o.end + .01)) return 'Openings on the same wall overlap.'
   }
+  if ((graph.site_edges || []).some(edge => !Number.isInteger(edge.segment_index) || edge.segment_index < 0 || !['wall', 'open', 'railing', 'parapet'].includes(edge.behavior) || !Number.isFinite(edge.height) || edge.height < 0 || !Number.isFinite(edge.thickness) || edge.thickness <= 0)) return 'A site edge has invalid boundary settings.'
   return null
 }
 export function wallPoint(graph: LayoutGraph, wall: Wall, t: number): Point { const a = point(graph, wall.a), b = point(graph, wall.b); return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t } }

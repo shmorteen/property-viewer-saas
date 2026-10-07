@@ -3,7 +3,7 @@ import json
 import trimesh
 import pytest
 
-from geometry import build_model
+from geometry import _end_cap, _panel_mesh, build_model
 
 
 def test_multi_room_glb_preserves_ids_and_scale():
@@ -127,3 +127,95 @@ def test_nine_room_40_by_30_plan_and_distinct_upper_footprint():
     assert len([node for node in scene.graph.nodes_geometry if node.startswith("room_")]) == 10
     assert len([node for node in scene.graph.nodes_geometry if node.startswith("wall_v10_")]) == 3
     assert len([node for node in scene.graph.nodes_geometry if node.startswith("wall_upper-1_")]) == 4
+
+
+@pytest.mark.parametrize("other", [(.5, .1), (.5, .9), (.7, .25), (.75, .65)])
+def test_corner_join_is_shared_and_bounded(other):
+    vertices = {"corner": {"x": .5, "y": .5}, "east": {"x": .9, "y": .5},
+                "other": {"x": other[0], "y": other[1]}}
+    walls = [{"id": "east", "a": "corner", "b": "east", "kind": "exterior", "thickness": .18},
+             {"id": "other", "a": "corner", "b": "other", "kind": "exterior", "thickness": .18}]
+    first = _end_cap("corner", "east", walls[0], walls, vertices, 12, 9)
+    second = _end_cap("corner", "other", walls[1], walls, vertices, 12, 9)
+    points = lambda pair: sorted(tuple(round(float(axis), 6) for axis in point) for point in pair)
+    assert points(first) == points(second), "Adjacent walls must share one joint cap"
+    origin = __import__("numpy").array([0., 0.])
+    assert all(__import__("numpy").linalg.norm(point - origin) < .46 for point in first)
+    panel = _panel_mesh(first[0], first[1],
+                        __import__("numpy").array([4.8, .09]), __import__("numpy").array([4.8, -.09]), 0, 2.7)
+    assert panel.is_watertight
+    assert panel.volume > 0
+
+
+@pytest.mark.parametrize("branches", [2, 3])
+def test_t_and_cross_junctions_use_bounded_caps(branches):
+    vertices = {"center": {"x": .5, "y": .5}, "east": {"x": .9, "y": .5},
+                "west": {"x": .1, "y": .5}, "north": {"x": .5, "y": .1},
+                "south": {"x": .5, "y": .9}}
+    walls = [{"id": name, "a": "center", "b": name, "kind": "interior", "thickness": .1}
+             for name in ["east", "west", "north", "south"][:branches + 1]]
+    left, right = _end_cap("center", "east", walls[0], walls, vertices, 12, 9)
+    assert __import__("numpy").linalg.norm(left) == pytest.approx(.05)
+    assert __import__("numpy").linalg.norm(right) == pytest.approx(.05)
+
+
+def test_filleted_footprint_exports_connected_bounded_wall_panels():
+    coordinates = [("a", .1, .2), ("f1", .105, .16), ("f2", .13, .12),
+                   ("f3", .17, .105), ("f4", .2, .1), ("b", .8, .1),
+                   ("c", .8, .8), ("d", .1, .8)]
+    points = [{"x": x, "y": y} for _, x, y in coordinates]
+    vertices = [{"id": key, "x": x, "y": y} for key, x, y in coordinates]
+    walls = [{"id": f"fillet{i}", "a": coordinates[i][0],
+              "b": coordinates[(i + 1) % len(coordinates)][0],
+              "kind": "exterior", "height": 2.7, "thickness": .18}
+             for i in range(len(coordinates))]
+    glb, _ = build_model({"id": "fillet", "layout_width_m": 12},
+                         [{"id": "level", "name": "Fillet level", "elevation": 0, "canvas_width": 1200, "canvas_height": 900}],
+                         [{"id": "room", "name": "Fillet room", "level_id": "level", "category": "indoor", "height": 2.7}],
+                         [{"room_id": "room", "level_id": "level", "points": points}], [],
+                         [{"level_id": "level", "graph": {"vertices": vertices, "walls": walls, "openings": []}}])
+    scene = trimesh.load(file_obj=__import__('io').BytesIO(glb), file_type='glb', force='scene')
+    panels = [scene.geometry[scene.graph.get(node)[1]] for node in scene.graph.nodes_geometry
+              if node.startswith('wall_fillet')]
+    assert len(panels) == len(walls)
+    assert all(panel.is_watertight and panel.volume > 0 for panel in panels)
+    floor = scene.geometry[scene.graph.get('room_room')[1]]
+    assert all(panel.bounds[0, axis] >= floor.bounds[0, axis] - .25 and
+               panel.bounds[1, axis] <= floor.bounds[1, axis] + .25
+               for panel in panels for axis in (0, 2))
+
+
+def test_multiple_openings_and_outdoor_edges_do_not_create_full_height_rails():
+    prop = {"id": "mixed", "layout_width_m": 12}
+    levels = [{"id": "ground", "name": "Ground", "elevation": 0, "canvas_width": 1200, "canvas_height": 900}]
+    rooms = [{"id": "inside", "level_id": "ground", "name": "Inside", "category": "indoor", "height": 2.7},
+             {"id": "balcony", "level_id": "ground", "name": "Balcony", "category": "outdoor", "space_type": "balcony", "height": .1},
+             {"id": "porch", "level_id": "ground", "name": "Porch", "category": "outdoor", "space_type": "porch", "height": .1}]
+    polygons = [{"room_id": "inside", "level_id": "ground", "points": [{"x": .1, "y": .1}, {"x": .7, "y": .1}, {"x": .7, "y": .7}, {"x": .1, "y": .7}]},
+                {"room_id": "balcony", "level_id": "ground", "points": [{"x": .72, "y": .1}, {"x": .9, "y": .1}, {"x": .9, "y": .35}, {"x": .72, "y": .35}]},
+                {"room_id": "porch", "level_id": "ground", "points": [{"x": .72, "y": .4}, {"x": .9, "y": .4}, {"x": .9, "y": .65}, {"x": .72, "y": .65}]}]
+    vertices = [{"id": key, "x": xy[0], "y": xy[1]} for key, xy in [("a",(.1,.1)),("b",(.7,.1)),("c",(.7,.7)),("d",(.1,.7))]]
+    walls = [{"id": f"w{i}", "a": a, "b": b, "kind": "exterior", "height": 2.7, "thickness": .18}
+             for i, (a,b) in enumerate([("a","b"),("b","c"),("c","d"),("d","a")])]
+    openings = [{"id": key, "wall_id": "w0", "type": kind, "start": start, "end": end, "height": height, "sill": sill}
+                for key,kind,start,end,height,sill in [("window1","standard_window",.08,.2,1.2,.9),
+                    ("passage","entrance",.28,.45,2.7,0), ("window2","standard_window",.6,.75,1.2,.9)]]
+    graph = {"vertices": vertices, "walls": walls, "openings": openings,
+             "site_edges": [{"room_id": "balcony", "segment_index": 0, "behavior": "open", "height": 0, "thickness": .06},
+                            {"room_id": "porch", "segment_index": 1, "behavior": "railing", "height": 1.1, "thickness": .06}]}
+    glb, encoded = build_model(prop, levels, rooms, polygons, [], [{"level_id": "ground", "graph": graph}])
+    manifest = json.loads(encoded)
+    assert len(manifest['walls']) == 4
+    assert len(manifest['walls'][0]['openings']) == 3
+    assert {edge['behavior'] for edge in manifest['site_edges'] if edge['room_id'] == 'balcony'} == {'open','railing'}
+    assert {edge['behavior'] for edge in manifest['site_edges'] if edge['room_id'] == 'porch'} == {'open','railing'}
+    scene = trimesh.load(file_obj=__import__('io').BytesIO(glb), file_type='glb', force='scene')
+    assert len([node for node in scene.graph.nodes_geometry if node.startswith('wall_w0_')]) == 8
+    assert not any(node.startswith('edge_balcony_0_') for node in scene.graph.nodes_geometry)
+    assert not any(node.startswith('edge_porch_0_') for node in scene.graph.nodes_geometry)
+    for node in scene.graph.nodes_geometry:
+        if node.startswith('edge_balcony_') or node.startswith('edge_porch_'):
+            transform, mesh_name = scene.graph.get(node)
+            mesh = scene.geometry[mesh_name].copy()
+            mesh.apply_transform(transform)
+            assert mesh.bounds[1][1] <= 1.11, 'Guardrails must stay well below full wall height'

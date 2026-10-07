@@ -25,9 +25,66 @@ def _world_point(point: dict, width: float, depth: float) -> tuple[float, float]
     return ((x - 0.5) * width, (0.5 - y) * depth)
 
 
+def _cross2(a: np.ndarray, b: np.ndarray) -> float:
+    return float(a[0] * b[1] - a[1] * b[0])
+
+
+def _line_intersection(p: np.ndarray, direction: np.ndarray, q: np.ndarray,
+                       other: np.ndarray) -> np.ndarray | None:
+    denominator = _cross2(direction, other)
+    if abs(denominator) < 1e-7:
+        return None
+    return p + direction * _cross2(q - p, other) / denominator
+
+
+def _end_cap(vertex_id: str, other_id: str, wall: dict, walls: list[dict],
+             vertices: dict, width: float, depth: float) -> tuple[np.ndarray, np.ndarray]:
+    """Two shared miter points, or a bounded flat cap at complex/acute joins."""
+    origin = np.array(_world_point(vertices[vertex_id], width, depth))
+    toward = np.array(_world_point(vertices[other_id], width, depth)) - origin
+    direction = toward / np.linalg.norm(toward)
+    normal = np.array([-direction[1], direction[0]])
+    half = float(wall['thickness']) / 2
+    plain = (origin + normal * half, origin - normal * half)
+    neighbors = [item for item in walls if item['id'] != wall['id'] and
+                 item['kind'] != 'virtual' and vertex_id in (item['a'], item['b'])]
+    if len(neighbors) != 1:
+        return plain
+    neighbor = neighbors[0]
+    neighbor_other = neighbor['b'] if neighbor['a'] == vertex_id else neighbor['a']
+    n_direction = np.array(_world_point(vertices[neighbor_other], width, depth)) - origin
+    n_direction /= np.linalg.norm(n_direction)
+    turn = _cross2(direction, n_direction)
+    if abs(turn) < .02:
+        return plain
+    n_normal = np.array([-n_direction[1], n_direction[0]])
+    n_half = float(neighbor['thickness']) / 2
+    left = _line_intersection(plain[0], direction, origin - n_normal * n_half, n_direction)
+    right = _line_intersection(plain[1], direction, origin + n_normal * n_half, n_direction)
+    limit = max(float(wall['thickness']), float(neighbor['thickness'])) * 2.5
+    if left is None or right is None or max(np.linalg.norm(left - origin), np.linalg.norm(right - origin)) > limit:
+        return plain
+    return left, right
+
+
+def _panel_mesh(start_left: np.ndarray, start_right: np.ndarray, end_left: np.ndarray,
+                end_right: np.ndarray, bottom: float, top: float) -> trimesh.Trimesh:
+    corners = [start_left, end_left, end_right, start_right]
+    vertices = np.array([[x, y, z] for y in (bottom, top) for x, z in corners])
+    faces = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7]]
+    for i in range(4):
+        j = (i + 1) % 4
+        faces.extend(([i, j, j + 4], [i, j + 4, i + 4]))
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    if mesh.volume < 0:
+        mesh.invert()
+    return mesh
+
+
 def _add_wall(scene: trimesh.Scene, start: tuple[float, float], end: tuple[float, float],
               elevation: float, height: float, thickness: float, name: str,
-              openings: list[dict] | None = None) -> None:
+              openings: list[dict] | None = None,
+              caps: tuple[tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray]] | None = None) -> None:
     """Construct solid wall panels around normalized horizontal openings."""
     delta = np.array(end) - np.array(start)
     length = float(np.linalg.norm(delta))
@@ -49,14 +106,21 @@ def _add_wall(scene: trimesh.Scene, start: tuple[float, float], end: tuple[float
             spans.append((left, right, top, height))
         cursor = right
     spans.append((cursor, 1.0, 0.0, height))
-    angle = math.atan2(-delta[1], delta[0])
+    direction = delta / length
+    normal = np.array([-direction[1], direction[0]]) * thickness / 2
+    def section(position: float) -> tuple[np.ndarray, np.ndarray]:
+        if caps and position < 1e-8:
+            return caps[0]
+        if caps and position > 1 - 1e-8:
+            return caps[1]
+        center = np.array(start) + delta * position
+        return center + normal, center - normal
     for index, (left, right, bottom, top) in enumerate(spans):
         if right - left < .0001 or top - bottom < .0001:
             continue
-        panel = trimesh.creation.box(extents=[length * (right - left), top - bottom, thickness])
-        panel.apply_transform(trimesh.transformations.rotation_matrix(angle, [0, 1, 0]))
-        center = np.array(start) + delta * ((left + right) / 2)
-        panel.apply_translation([center[0], elevation + (top + bottom) / 2, center[1]])
+        start_left, start_right = section(left)
+        end_left, end_right = section(right)
+        panel = _panel_mesh(start_left, start_right, end_left, end_right, elevation + bottom, elevation + top)
         panel.visual.vertex_colors = np.tile([230, 235, 230, 255], (len(panel.vertices), 1))
         scene.add_geometry(panel, node_name=f"{name}_{index}", geom_name=f"{name}_{index}")
 
@@ -169,7 +233,10 @@ def build_model(property_row: dict, levels: list[dict], rooms: list[dict],
                 left_room = next((rid for rid, shape in room_shapes.items() if shape.contains(left)), None)
                 right_room = next((rid for rid, shape in room_shapes.items() if shape.contains(right)), None)
                 name = f"wall_{wall['id']}"
-                _add_wall(scene, start, end, elevation, float(wall['height']), float(wall['thickness']), name, attached)
+                cap_start = _end_cap(wall['a'], wall['b'], wall, graph['walls'], vertices, width, depth)
+                cap_end_outward = _end_cap(wall['b'], wall['a'], wall, graph['walls'], vertices, width, depth)
+                caps = (cap_start, (cap_end_outward[1], cap_end_outward[0]))
+                _add_wall(scene, start, end, elevation, float(wall['height']), float(wall['thickness']), name, attached, caps)
                 wall_records.append({'id': wall['id'], 'level_id': level_id, 'kind': wall['kind'],
                                      'start': list(start), 'end': list(end), 'left_space_id': left_room,
                                      'right_space_id': right_room,
@@ -180,12 +247,35 @@ def build_model(property_row: dict, levels: list[dict], rooms: list[dict],
                 a = _world_point({'x': start[0], 'y': start[1]}, width, depth)
                 b = _world_point({'x': end[0], 'y': end[1]}, width, depth)
                 _add_wall(scene, a, b, elevation, 2.7, .10, f"wall_legacy_{level_id}_{index}")
+    site_edges: list[dict] = []
+    for room in rooms:
+        if room.get('category') != 'outdoor' or room['level_id'] not in graph_by_level:
+            continue  # Leave legacy outdoor geometry unchanged.
+        polygon = polygon_by_room.get(room['id'])
+        if not polygon:
+            continue
+        level = level_by_id[room['level_id']]
+        depth = width * float(level['canvas_height']) / float(level['canvas_width'])
+        graph = graph_by_level[room['level_id']]
+        defaults = {'balcony': 'railing', 'terrace': 'railing', 'porch': 'open', 'patio': 'open'}
+        for index, point in enumerate(polygon['points']):
+            override = next((edge for edge in graph.get('site_edges', []) if edge['room_id'] == room['id'] and edge['segment_index'] == index), None)
+            behavior = override['behavior'] if override else defaults.get(room.get('space_type'), 'open')
+            edge_height = float(override['height']) if override else (1.05 if behavior == 'railing' else .9 if behavior == 'parapet' else 2.7 if behavior == 'wall' else 0)
+            edge_thickness = float(override['thickness']) if override else (.06 if behavior == 'railing' else .12)
+            if behavior != 'open' and edge_height > 0:
+                start = _world_point(point, width, depth)
+                end = _world_point(polygon['points'][(index + 1) % len(polygon['points'])], width, depth)
+                _add_wall(scene, start, end, float(level['elevation']), edge_height, edge_thickness, f"edge_{room['id']}_{index}")
+            site_edges.append({'id': f"{room['id']}_{index}", 'room_id': room['id'], 'level_id': room['level_id'],
+                               'segment_index': index, 'behavior': behavior, 'height': edge_height,
+                               'thickness': edge_thickness})
     manifest = {
         "schema_version": 2, "property_id": property_row["id"], "units": "metres",
         "layout_width_m": width,
         "levels": [{"id": level["id"], "name": level["name"], "elevation": float(level["elevation"])}
                    for level in levels],
-        "rooms": room_records, "walls": wall_records,
+        "rooms": room_records, "walls": wall_records, "site_edges": site_edges,
     }
     glb = scene.export(file_type="glb")
     if not isinstance(glb, bytes) or len(glb) < 100:
