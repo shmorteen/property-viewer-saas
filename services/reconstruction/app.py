@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -13,6 +14,7 @@ from fastapi import FastAPI
 from supabase import Client, ClientOptions, create_client
 
 from geometry import build_model, image_size
+from plan_parser import analyze_plan
 
 logger = logging.getLogger("reconstruction")
 
@@ -82,6 +84,23 @@ def process_job(db: Client, job: dict) -> None:
         "completed_at": datetime.now(timezone.utc).isoformat()}).eq("id", job_id).execute()
 
 
+def process_plan_job(db: Client, job: dict) -> None:
+    level = _rows(db, 'levels', 'id', job['level_id'])[0]
+    prop = _rows(db, 'properties', 'id', level['property_id'])[0]
+    raw = db.storage.from_('floor-plans').download(job['source_path'])
+    prefix = f"{prop['organization_id']}/{job['id']}"
+    bucket = db.storage.from_('plan-analysis')
+    # Preserve immutable raw bytes independently of future floor-plan replacements.
+    bucket.upload(f'{prefix}/original.image', raw, {'content-type':'application/octet-stream','upsert':'true'})
+    result, normalized = analyze_plan(raw)
+    bucket.upload(f'{prefix}/normalized.png', normalized, {'content-type':'image/png','upsert':'true'})
+    encoded = json.dumps(result, allow_nan=False).encode()
+    bucket.upload(f'{prefix}/result.json', encoded, {'content-type':'application/json','upsert':'true'})
+    db.table('plan_extractions').update({'status':'completed','result':result,
+        'original_path':f'{prefix}/original.image','normalized_path':f'{prefix}/normalized.png',
+        'completed_at':datetime.now(timezone.utc).isoformat()}).eq('id',job['id']).execute()
+
+
 async def poll(db: Client) -> None:
     while True:
         try:
@@ -96,6 +115,17 @@ async def poll(db: Client) -> None:
                         "status": "failed", "error_message": str(exc)[:1000],
                         "completed_at": datetime.now(timezone.utc).isoformat()
                     }).eq("id", job["id"]).execute())
+            # The same single worker polls both queues; no additional service.
+            analyses = await asyncio.to_thread(lambda: db.rpc('claim_plan_extraction').execute())
+            for analysis in analyses.data or []:
+                try:
+                    await asyncio.to_thread(process_plan_job, db, analysis)
+                except Exception as exc:
+                    logger.exception('Plan analysis %s failed', analysis['id'])
+                    await asyncio.to_thread(lambda: db.table('plan_extractions').update({
+                        'status':'failed','error_message':str(exc)[:1000],
+                        'completed_at':datetime.now(timezone.utc).isoformat()
+                    }).eq('id',analysis['id']).execute())
         except Exception:
             logger.exception("Could not poll processing queue")
         await asyncio.sleep(float(os.environ.get("POLL_SECONDS", "5")))

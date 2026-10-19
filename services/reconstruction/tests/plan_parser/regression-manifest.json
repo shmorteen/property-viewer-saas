@@ -1,0 +1,19 @@
+{
+  "description": "Authored regression references; not held-out real-plan evidence",
+  "fixtures": [
+    {
+      "id": "clean-dark",
+      "split": "development",
+      "image": "fixtures/clean-dark.png",
+      "truth": "fixtures/clean-dark.truth.json",
+      "kind": "authored_analytic"
+    },
+    {
+      "id": "gray-furnished",
+      "split": "development",
+      "image": "fixtures/gray-furnished.png",
+      "truth": "fixtures/gray-furnished.truth.json",
+      "kind": "authored_analytic"
+    }
+  ]
+}

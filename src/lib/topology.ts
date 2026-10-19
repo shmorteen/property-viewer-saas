@@ -181,7 +181,7 @@ function splitAt(graph: LayoutGraph, snap: Snap): string {
   }
   return id
 }
-export function addPartition(source: LayoutGraph, path: Snap[]): LayoutGraph {
+export function addPartition(source: LayoutGraph, path: Snap[], kind: 'interior' | 'virtual' = 'interior'): LayoutGraph {
   if (path.length < 2 || !['wall', 'vertex'].includes(path[0].kind) || !['wall', 'vertex'].includes(path[path.length - 1].kind)) throw new Error('Start and finish the partition on a highlighted wall or vertex.')
   const graph: LayoutGraph = structuredClone(source)
   const ids = path.map((snap, index) => {
@@ -195,7 +195,7 @@ export function addPartition(source: LayoutGraph, path: Snap[]): LayoutGraph {
   })
   for (let i = 0; i < ids.length - 1; i++) {
     if (ids[i] === ids[i + 1] || Math.hypot(point(graph, ids[i]).x - point(graph, ids[i + 1]).x, point(graph, ids[i]).y - point(graph, ids[i + 1]).y) < .005) throw new Error('Partition contains a zero-length wall.')
-    graph.walls.push({ id: crypto.randomUUID(), a: ids[i], b: ids[i + 1], kind: 'interior', thickness: .1, height: 2.7 })
+    graph.walls.push({ id: crypto.randomUUID(), a: ids[i], b: ids[i + 1], kind, thickness: .1, height: 2.7 })
   }
   const problem = validateGraph(graph)
   if (problem) throw new Error(problem)
@@ -273,7 +273,7 @@ export function validateGraph(graph: LayoutGraph): string | null {
   if (graph.rooms.some(r => regions.filter(f => f.room_id === r.room_id).length !== 1)) return 'A room lost its enclosed area. Move its partition or remove the room assignment first.'
   for (const o of graph.openings) {
     const w = graph.walls.find(item => item.id === o.wall_id)
-    if (!w || o.start < (o.type === 'entrance' || o.path_id ? 0 : .02) || o.end > (o.type === 'entrance' || o.path_id ? 1 : .98) || o.end - o.start < .02 || o.start >= o.end) return 'Opening must fit on an existing wall.'
+    if (!w || w.kind === 'virtual' || o.start < (o.type === 'entrance' || o.path_id ? 0 : .02) || o.end > (o.type === 'entrance' || o.path_id ? 1 : .98) || o.end - o.start < .02 || o.start >= o.end) return 'Opening must fit on an existing physical wall.'
     if (!['standard_door', 'double_door', 'standard_window', 'wide_window', 'entrance'].includes(o.type) || !Number.isFinite(o.height) || o.height <= 0 || !Number.isFinite(o.sill) || o.sill < 0 || o.sill + o.height > w.height + 1e-6) return 'Opening height must fit within its wall.'
     if (o.width_m !== undefined && (!Number.isFinite(o.width_m) || o.width_m <= 0)) return 'Opening width must be positive.'
     if (graph.openings.some(other => other !== o && other.wall_id === o.wall_id && o.start < other.end + .01 && other.start < o.end + .01)) return 'Openings on the same wall overlap.'

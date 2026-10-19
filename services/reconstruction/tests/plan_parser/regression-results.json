@@ -1,0 +1,465 @@
+{
+  "split": "development",
+  "cases": [
+    {
+      "id": "clean-dark",
+      "mode": "CV-only",
+      "status": "NEEDS_REVIEW",
+      "structure_confidence": {
+        "score": 0.92,
+        "valid": true,
+        "method": "topology validity + retained structural evidence; heuristic"
+      },
+      "semantic_confidence": {
+        "score": 0.35,
+        "labels_detected": 1
+      },
+      "opening_confidence": {
+        "score": 0.0,
+        "review_candidates": 4
+      },
+      "scale_confidence": {
+        "score": 0.0,
+        "reason": "Wall measurement required"
+      },
+      "reference_kind": "authored_analytic",
+      "errors": [],
+      "quality": {
+        "accepted": true,
+        "width": 500,
+        "height": 400,
+        "processing_width": 1125,
+        "processing_height": 900,
+        "native_resolution": false,
+        "original_preserved": true,
+        "blur_laplacian": 1795.968,
+        "contrast": 240.0,
+        "ink_fraction": 0.0521,
+        "skew_degrees": 0.0,
+        "orientation_spread": 0.675,
+        "perspective": "not established",
+        "compression": "not reliably measurable from decoded pixels",
+        "corrections": [
+          "working image resized to 1125 x 900; exact inverse scale retained"
+        ],
+        "errors": [],
+        "warnings": [
+          "Small source: structural working image normalized; OCR/opening confidence is reduced.",
+          "Perspective and compression estimates are heuristic; inspect the structural overlay."
+        ],
+        "working_to_original": [
+          [
+            0.4444444444444444,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.4444444444444444,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "model": {
+        "available": false,
+        "name": "CV-only"
+      },
+      "manual_correction_seconds": null,
+      "typescript_validation": null,
+      "metrics": {
+        "wall_precision": 1.0,
+        "wall_recall": 1.0,
+        "wall_endpoint_distance_image_width": 0.0006287414610910266,
+        "building_footprint_iou": 0.9970405415565399,
+        "detected_room_count": 3,
+        "ground_truth_room_count": 3,
+        "room_polygon_iou": 0.9945896346306906,
+        "room_adjacency_precision": 1.0,
+        "room_adjacency_recall": 1.0,
+        "openings": {
+          "door": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "attachment_accuracy": null,
+            "predicted": 0,
+            "ground_truth": 2
+          },
+          "window": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "attachment_accuracy": null,
+            "predicted": 0,
+            "ground_truth": 2
+          }
+        },
+        "room_label_accuracy": null,
+        "scale_relative_error": null,
+        "invalid_topology_count": 0,
+        "estimated_edit_operations": 4,
+        "edit_cost_definition": "Unmatched walls/openings: add/delete; displaced endpoints: move; unmatched rooms: assign; wrong labels: edit. Estimate, not observed UI operations.",
+        "unresolved_elements": 7
+      },
+      "downstream_3d": {
+        "succeeded": true,
+        "bytes": 8328,
+        "physical_wall_count": 10,
+        "room_faces": 3,
+        "test_width_m": 12.0
+      }
+    },
+    {
+      "id": "clean-dark",
+      "mode": "semantic+geometry",
+      "status": "NEEDS_REVIEW",
+      "structure_confidence": {
+        "score": 0.92,
+        "valid": true,
+        "method": "topology validity + retained structural evidence; heuristic"
+      },
+      "semantic_confidence": {
+        "score": 0.35,
+        "labels_detected": 1
+      },
+      "opening_confidence": {
+        "score": 0.0,
+        "review_candidates": 4
+      },
+      "scale_confidence": {
+        "score": 0.0,
+        "reason": "Wall measurement required"
+      },
+      "reference_kind": "authored_analytic",
+      "errors": [],
+      "quality": {
+        "accepted": true,
+        "width": 500,
+        "height": 400,
+        "processing_width": 1125,
+        "processing_height": 900,
+        "native_resolution": false,
+        "original_preserved": true,
+        "blur_laplacian": 1795.968,
+        "contrast": 240.0,
+        "ink_fraction": 0.0521,
+        "skew_degrees": 0.0,
+        "orientation_spread": 0.675,
+        "perspective": "not established",
+        "compression": "not reliably measurable from decoded pixels",
+        "corrections": [
+          "working image resized to 1125 x 900; exact inverse scale retained"
+        ],
+        "errors": [],
+        "warnings": [
+          "Small source: structural working image normalized; OCR/opening confidence is reduced.",
+          "Perspective and compression estimates are heuristic; inspect the structural overlay."
+        ],
+        "working_to_original": [
+          [
+            0.4444444444444444,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.4444444444444444,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "model": {
+        "name": "Yytsi floorplan-to-3d-walls / ResNet34-UNet",
+        "version": "68843a3ab7b12aa03b23c36f955a0d8099b4e2ee",
+        "source": "https://huggingface.co/Yytsi/floorplan-to-3d-walls/tree/68843a3ab7b12aa03b23c36f955a0d8099b4e2ee",
+        "license": "MIT (published model card); trained on CubiCasa5K",
+        "sha256": "a5994cc885834ff96f108d0811af6e46dafb0f8a3cfb300574648771d3bb0828",
+        "available": true
+      },
+      "manual_correction_seconds": null,
+      "typescript_validation": null,
+      "metrics": {
+        "wall_precision": 1.0,
+        "wall_recall": 1.0,
+        "wall_endpoint_distance_image_width": 0.0006287414610910266,
+        "building_footprint_iou": 0.9970405415565399,
+        "detected_room_count": 3,
+        "ground_truth_room_count": 3,
+        "room_polygon_iou": 0.9945896346306906,
+        "room_adjacency_precision": 1.0,
+        "room_adjacency_recall": 1.0,
+        "openings": {
+          "door": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "attachment_accuracy": null,
+            "predicted": 0,
+            "ground_truth": 2
+          },
+          "window": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "attachment_accuracy": null,
+            "predicted": 0,
+            "ground_truth": 2
+          }
+        },
+        "room_label_accuracy": null,
+        "scale_relative_error": null,
+        "invalid_topology_count": 0,
+        "estimated_edit_operations": 4,
+        "edit_cost_definition": "Unmatched walls/openings: add/delete; displaced endpoints: move; unmatched rooms: assign; wrong labels: edit. Estimate, not observed UI operations.",
+        "unresolved_elements": 7
+      },
+      "downstream_3d": {
+        "succeeded": true,
+        "bytes": 8328,
+        "physical_wall_count": 10,
+        "room_faces": 3,
+        "test_width_m": 12.0
+      }
+    },
+    {
+      "id": "gray-furnished",
+      "mode": "CV-only",
+      "status": "NEEDS_REVIEW",
+      "structure_confidence": {
+        "score": 0.92,
+        "valid": true,
+        "method": "topology validity + retained structural evidence; heuristic"
+      },
+      "semantic_confidence": {
+        "score": 1.0,
+        "labels_detected": 4
+      },
+      "opening_confidence": {
+        "score": 0.0,
+        "review_candidates": 4
+      },
+      "scale_confidence": {
+        "score": 0.0,
+        "reason": "Wall measurement required"
+      },
+      "reference_kind": "authored_analytic",
+      "errors": [],
+      "quality": {
+        "accepted": true,
+        "width": 500,
+        "height": 400,
+        "processing_width": 1125,
+        "processing_height": 900,
+        "native_resolution": false,
+        "original_preserved": true,
+        "blur_laplacian": 1541.452,
+        "contrast": 100.0,
+        "ink_fraction": 0.0629,
+        "skew_degrees": 0.0,
+        "orientation_spread": 0.609,
+        "perspective": "not established",
+        "compression": "not reliably measurable from decoded pixels",
+        "corrections": [
+          "working image resized to 1125 x 900; exact inverse scale retained"
+        ],
+        "errors": [],
+        "warnings": [
+          "Small source: structural working image normalized; OCR/opening confidence is reduced.",
+          "Perspective and compression estimates are heuristic; inspect the structural overlay."
+        ],
+        "working_to_original": [
+          [
+            0.4444444444444444,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.4444444444444444,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "model": {
+        "available": false,
+        "name": "CV-only"
+      },
+      "manual_correction_seconds": null,
+      "typescript_validation": null,
+      "metrics": {
+        "wall_precision": 1.0,
+        "wall_recall": 1.0,
+        "wall_endpoint_distance_image_width": 0.00062790027792635,
+        "building_footprint_iou": 0.9970489124640363,
+        "detected_room_count": 3,
+        "ground_truth_room_count": 3,
+        "room_polygon_iou": 0.9945925679200905,
+        "room_adjacency_precision": 1.0,
+        "room_adjacency_recall": 1.0,
+        "openings": {
+          "door": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "attachment_accuracy": null,
+            "predicted": 0,
+            "ground_truth": 2
+          },
+          "window": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "attachment_accuracy": null,
+            "predicted": 0,
+            "ground_truth": 2
+          }
+        },
+        "room_label_accuracy": null,
+        "scale_relative_error": null,
+        "invalid_topology_count": 0,
+        "estimated_edit_operations": 4,
+        "edit_cost_definition": "Unmatched walls/openings: add/delete; displaced endpoints: move; unmatched rooms: assign; wrong labels: edit. Estimate, not observed UI operations.",
+        "unresolved_elements": 4
+      },
+      "downstream_3d": {
+        "succeeded": true,
+        "bytes": 8332,
+        "physical_wall_count": 10,
+        "room_faces": 3,
+        "test_width_m": 12.0
+      }
+    },
+    {
+      "id": "gray-furnished",
+      "mode": "semantic+geometry",
+      "status": "NEEDS_REVIEW",
+      "structure_confidence": {
+        "score": 0.92,
+        "valid": true,
+        "method": "topology validity + retained structural evidence; heuristic"
+      },
+      "semantic_confidence": {
+        "score": 1.0,
+        "labels_detected": 4
+      },
+      "opening_confidence": {
+        "score": 0.0,
+        "review_candidates": 26
+      },
+      "scale_confidence": {
+        "score": 0.0,
+        "reason": "Wall measurement required"
+      },
+      "reference_kind": "authored_analytic",
+      "errors": [],
+      "quality": {
+        "accepted": true,
+        "width": 500,
+        "height": 400,
+        "processing_width": 1125,
+        "processing_height": 900,
+        "native_resolution": false,
+        "original_preserved": true,
+        "blur_laplacian": 1541.452,
+        "contrast": 100.0,
+        "ink_fraction": 0.0629,
+        "skew_degrees": 0.0,
+        "orientation_spread": 0.609,
+        "perspective": "not established",
+        "compression": "not reliably measurable from decoded pixels",
+        "corrections": [
+          "working image resized to 1125 x 900; exact inverse scale retained"
+        ],
+        "errors": [],
+        "warnings": [
+          "Small source: structural working image normalized; OCR/opening confidence is reduced.",
+          "Perspective and compression estimates are heuristic; inspect the structural overlay."
+        ],
+        "working_to_original": [
+          [
+            0.4444444444444444,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.4444444444444444,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "model": {
+        "name": "Yytsi floorplan-to-3d-walls / ResNet34-UNet",
+        "version": "68843a3ab7b12aa03b23c36f955a0d8099b4e2ee",
+        "source": "https://huggingface.co/Yytsi/floorplan-to-3d-walls/tree/68843a3ab7b12aa03b23c36f955a0d8099b4e2ee",
+        "license": "MIT (published model card); trained on CubiCasa5K",
+        "sha256": "a5994cc885834ff96f108d0811af6e46dafb0f8a3cfb300574648771d3bb0828",
+        "available": true
+      },
+      "manual_correction_seconds": null,
+      "typescript_validation": null,
+      "metrics": {
+        "wall_precision": 1.0,
+        "wall_recall": 1.0,
+        "wall_endpoint_distance_image_width": 0.00062790027792635,
+        "building_footprint_iou": 0.9970489124640363,
+        "detected_room_count": 3,
+        "ground_truth_room_count": 3,
+        "room_polygon_iou": 0.9945925679200905,
+        "room_adjacency_precision": 1.0,
+        "room_adjacency_recall": 1.0,
+        "openings": {
+          "door": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "attachment_accuracy": null,
+            "predicted": 0,
+            "ground_truth": 2
+          },
+          "window": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "attachment_accuracy": null,
+            "predicted": 0,
+            "ground_truth": 2
+          }
+        },
+        "room_label_accuracy": null,
+        "scale_relative_error": null,
+        "invalid_topology_count": 0,
+        "estimated_edit_operations": 4,
+        "edit_cost_definition": "Unmatched walls/openings: add/delete; displaced endpoints: move; unmatched rooms: assign; wrong labels: edit. Estimate, not observed UI operations.",
+        "unresolved_elements": 26
+      },
+      "downstream_3d": {
+        "succeeded": true,
+        "bytes": 8332,
+        "physical_wall_count": 10,
+        "room_faces": 3,
+        "test_width_m": 12.0
+      }
+    }
+  ],
+  "production_ready": false,
+  "status": "evaluated_requires_human_assessment",
+  "semantic_comparison": "Optional semantic/opening evidence after identical raster structural reconstruction",
+  "correction_time": "Only operator-recorded correction_seconds is reported; no fabricated time estimates.",
+  "reference_counts": {
+    "authored_analytic": 2,
+    "human_verified": 0
+  }
+}

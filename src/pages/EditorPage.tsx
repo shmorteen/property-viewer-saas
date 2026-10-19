@@ -11,6 +11,7 @@ import { layoutTemplates } from '../lib/templates'
 import type { FloorPlan, Level, LevelType, Opening, OpeningType, Point, Property, Room, RoomMedia, RoomPolygon, SpaceCategory, SpaceType, StairConnection, StairType } from '../lib/types'
 import { FloorPlanCanvas } from '../components/FloorPlanCanvas'
 import { TopologyComposer } from '../components/TopologyComposer'
+import { PlanAnalysisPanel } from '../components/PlanAnalysisPanel'
 import { RoomPhotoTile } from '../components/RoomPhotoTile'
 import { Button, Card, Field, Input, Notice, PageHeader, Spinner, Textarea } from '../components/ui'
 
@@ -60,6 +61,8 @@ export function EditorPage() {
   const [newElevation, setNewElevation] = useState(2.7)
   const [snap, setSnap] = useState(true)
   const [topologyRevision, setTopologyRevision] = useState(0)
+  const [reviewingPlan, setReviewingPlan] = useState(false)
+  useEffect(() => { setReviewingPlan(false) }, [selectedLevelId])
   const [undoStack, setUndoStack] = useState<GeometryEdit[]>([])
   const [redoStack, setRedoStack] = useState<GeometryEdit[]>([])
   const [error, setError] = useState('')
@@ -170,7 +173,8 @@ export function EditorPage() {
 
       {layoutIsEmpty && activeLevel?.geometry_mode === 'legacy' && <Card><h2 className="text-lg font-extrabold">Start your layout</h2><p className="mt-1 text-sm text-slate-500">Upload a floor plan for this level and trace spaces, or start with editable geometry.</p><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{layoutTemplates.map(template => <button key={template.id} disabled={busy} onClick={() => { if (!id) return; void run(() => applyTemplate(id, { levels: template.levels }), `${template.label} created. Every space can now be edited.`) }} className="min-h-24 rounded-xl border border-line bg-cream p-3 text-left hover:border-pine hover:bg-mint"><strong className="block text-sm">{template.label}</strong><span className="mt-1 block text-xs text-slate-500">{template.description}</span></button>)}</div></Card>}
 
-      <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] 2xl:grid-cols-[220px_minmax(0,1fr)_300px]">
+      {property && activeLevel && floor && <PlanAnalysisPanel key={`${activeLevel.id}-${floor.storage_path}`} property={property} level={activeLevel} levels={levels} floor={floor} floorUrl={floorUrls[activeLevel.id] || null} onChanged={load} onReviewChange={setReviewingPlan}/>}
+      {!reviewingPlan && <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] 2xl:grid-cols-[220px_minmax(0,1fr)_300px]">
         {activeLevel?.geometry_mode === 'topology' && <div className="min-w-0 lg:col-span-1 2xl:col-span-2"><Card><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-extrabold">{activeLevel.name} · shared-wall layout</h2><p className="text-xs text-slate-500">Trace boundaries, partition the building, then assign rooms to enclosed areas.</p></div><label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-line px-3 text-sm font-semibold hover:bg-mint"><UploadCloud size={16}/>{floor ? 'Replace plan' : 'Upload plan'}<input aria-label="Upload floor plan" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={onFloor} disabled={busy}/></label></div><TopologyComposer propertyId={id!} layoutWidthM={property?.layout_width_m || 12} level={activeLevel} levels={levels} floor={floor} floorUrl={floor ? floorUrls[activeLevel.id] || null : null} rooms={levelRooms} polygons={levelPolygons} revision={topologyRevision} onChanged={load} onSelectRoom={roomId => setSelectedRoomId(roomId)}/></Card></div>}
         <div className={activeLevel?.geometry_mode === 'topology' ? 'hidden' : 'space-y-5'}><Card><h2 className="font-extrabold">Indoor spaces</h2><div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-1">{indoorTools.map(tool => <button key={tool.type} disabled={busy} onClick={() => addSpace(tool.type, 'indoor', tool.label)} className="min-h-10 rounded-lg border border-line px-3 text-left text-sm hover:bg-mint">+ {tool.label}</button>)}</div></Card><Card><h2 className="font-extrabold">Outdoor</h2><div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-1">{outdoorTools.map(tool => <button key={tool.type} disabled={busy} onClick={() => addSpace(tool.type, 'outdoor', tool.label)} className="min-h-10 rounded-lg border border-line px-3 text-left text-sm hover:bg-mint">+ {tool.label}</button>)}</div></Card><Card><h2 className="font-extrabold">Features</h2><button disabled={busy} onClick={() => addSpace('stairs', 'indoor', 'Stairs')} className="mt-3 min-h-10 w-full rounded-lg border border-line px-3 text-left text-sm hover:bg-mint">+ Stairs</button><div className="mt-2 grid grid-cols-2 gap-2">{openingTools.map(tool => <button key={tool.type} disabled={busy || !activeRoom || !levelPolygons.some(poly => poly.room_id === activeRoom.id)} onClick={() => { setPlacingOpening(tool.type); setDrawing(false); setSelectedOpeningId(null) }} className={`min-h-10 rounded-lg border px-2 text-left text-xs ${placingOpening === tool.type ? 'border-pine bg-mint' : 'border-line hover:bg-mint'}`}>+ {tool.label}</button>)}</div></Card></div>
 
@@ -197,7 +201,7 @@ export function EditorPage() {
           </Card>}
           {selectedOpening && <Card><h2 className="font-extrabold">Selected opening</h2><p className="mt-1 text-sm capitalize text-slate-500">{selectedOpening.opening_type.replaceAll('_',' ')}</p><Field label="Width (m)"><Input key={`${selectedOpening.id}-width`} className="mt-2" type="number" min="0.4" max="4" step="0.1" defaultValue={selectedOpening.width} onBlur={e => { const value = Number(e.target.value); if (Number.isFinite(value) && value !== Number(selectedOpening.width)) void run(() => saveOpening({ ...selectedOpening, width: value }).then(() => {}), 'Opening width updated.') }}/></Field><p className="mt-2 text-xs text-slate-500">Drag the marker along its wall to change position.</p><Button size="sm" variant="danger" className="mt-3" disabled={busy} onClick={() => { if (window.confirm('Delete this opening?')) void run(async () => { await deleteOpening(selectedOpening.id); setSelectedOpeningId(null) }, 'Opening deleted.') }}><Trash2 size={15}/>Delete opening</Button></Card>}
         </div>
-      </div>
+      </div>}
     </div>}
   </>
 }

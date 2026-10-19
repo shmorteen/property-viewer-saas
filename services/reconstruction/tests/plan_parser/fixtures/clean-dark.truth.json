@@ -1,0 +1,190 @@
+{
+  "reference_kind": "authored_analytic",
+  "verified_by": "Analytic centerline specification; agent visual review, not human ground truth",
+  "verified_at": "2026-10-18",
+  "image_sha256": "bbb15a09d178dfa07824be1970a1d8f1da6dd8f1955753426cb0a4a8cb4f5280",
+  "graph": {
+    "vertices": [
+      {
+        "id": "v0",
+        "x": 0.14,
+        "y": 0.175
+      },
+      {
+        "id": "v1",
+        "x": 0.5,
+        "y": 0.175
+      },
+      {
+        "id": "v2",
+        "x": 0.86,
+        "y": 0.175
+      },
+      {
+        "id": "v3",
+        "x": 0.86,
+        "y": 0.575
+      },
+      {
+        "id": "v4",
+        "x": 0.86,
+        "y": 0.825
+      },
+      {
+        "id": "v5",
+        "x": 0.5,
+        "y": 0.825
+      },
+      {
+        "id": "v6",
+        "x": 0.14,
+        "y": 0.825
+      },
+      {
+        "id": "v7",
+        "x": 0.5,
+        "y": 0.575
+      }
+    ],
+    "walls": [
+      {
+        "id": "w0",
+        "a": "v0",
+        "b": "v1",
+        "kind": "exterior",
+        "height": 2.7,
+        "thickness": 0.1
+      },
+      {
+        "id": "w1",
+        "a": "v1",
+        "b": "v2",
+        "kind": "exterior",
+        "height": 2.7,
+        "thickness": 0.1
+      },
+      {
+        "id": "w2",
+        "a": "v2",
+        "b": "v3",
+        "kind": "exterior",
+        "height": 2.7,
+        "thickness": 0.1
+      },
+      {
+        "id": "w3",
+        "a": "v3",
+        "b": "v4",
+        "kind": "exterior",
+        "height": 2.7,
+        "thickness": 0.1
+      },
+      {
+        "id": "w4",
+        "a": "v4",
+        "b": "v5",
+        "kind": "exterior",
+        "height": 2.7,
+        "thickness": 0.1
+      },
+      {
+        "id": "w5",
+        "a": "v5",
+        "b": "v6",
+        "kind": "exterior",
+        "height": 2.7,
+        "thickness": 0.1
+      },
+      {
+        "id": "w6",
+        "a": "v6",
+        "b": "v0",
+        "kind": "exterior",
+        "height": 2.7,
+        "thickness": 0.1
+      },
+      {
+        "id": "w7",
+        "a": "v1",
+        "b": "v7",
+        "kind": "interior",
+        "height": 2.7,
+        "thickness": 0.1
+      },
+      {
+        "id": "w8",
+        "a": "v7",
+        "b": "v5",
+        "kind": "interior",
+        "height": 2.7,
+        "thickness": 0.1
+      },
+      {
+        "id": "w9",
+        "a": "v7",
+        "b": "v3",
+        "kind": "interior",
+        "height": 2.7,
+        "thickness": 0.1
+      }
+    ],
+    "building_boundary": [
+      "v0",
+      "v1",
+      "v2",
+      "v3",
+      "v4",
+      "v5",
+      "v6"
+    ],
+    "property_boundary": [],
+    "rooms": [],
+    "openings": [
+      {
+        "id": "o0",
+        "wall_id": "w0",
+        "start": 0.3888888888888889,
+        "end": 0.5833333333333334,
+        "type": "standard_window",
+        "height": 1.2,
+        "sill": 0.9,
+        "swing": 1
+      },
+      {
+        "id": "o1",
+        "wall_id": "w6",
+        "start": 0.4807692307692308,
+        "end": 0.6153846153846154,
+        "type": "standard_window",
+        "height": 1.2,
+        "sill": 0.9,
+        "swing": 1
+      },
+      {
+        "id": "o2",
+        "wall_id": "w7",
+        "start": 0.5,
+        "end": 0.71875,
+        "type": "standard_door",
+        "height": 2.1,
+        "sill": 0,
+        "swing": 1
+      },
+      {
+        "id": "o3",
+        "wall_id": "w9",
+        "start": 0.4444444444444444,
+        "end": 0.6222222222222222,
+        "type": "standard_door",
+        "height": 2.1,
+        "sill": 0,
+        "swing": 1
+      }
+    ],
+    "site_edges": [],
+    "stairs": []
+  },
+  "rooms": [],
+  "width_m": null,
+  "note": "Door/window detection is scored separately from continuous host-wall structure."
+}

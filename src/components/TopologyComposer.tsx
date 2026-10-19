@@ -6,11 +6,12 @@ import { overlapsAnother, validLayoutPolygon } from '../lib/geometry'
 import { OPENING_WIDTHS_M, OPENING_WIDTH_BOUNDS_M, addPartition, contains, createBuilding, emptyGraph, entranceSpans, faceCenter, faces, filletCorner, footprint, openingAt, orthogonalPoint, preserveOpeningWidths, snapToGraph, validateBoundary, validateGraph, wallLengthM, wallParameter, wallPoint, type EdgeBehavior, type LayoutGraph, type OpeningPreset, type Snap, type SnapOptions, type StairDirection, type StairFeature, type StairKind, type TopologyOpening, type Wall } from '../lib/topology'
 import type { FloorPlan, Level, Point, Room, RoomPolygon, SpaceType } from '../lib/types'
 import { Button } from './ui'
+import { validatePlanCandidate, type PlanCalibration, type PlanReview } from '../lib/plan-analysis'
 
 type Mode = 'select' | 'property' | 'building' | 'partition' | 'room' | 'door' | 'double_door' | 'window' | 'wide_window' | 'entrance' | 'outdoor' | 'stairs'
 type LayerName = 'property' | 'building' | 'spaces' | 'doors' | 'windows' | 'background'
-type Props = { propertyId: string; layoutWidthM: number; level: Level; levels: Level[]; floor: FloorPlan | undefined; floorUrl: string | null; rooms: Room[]; polygons: RoomPolygon[]; revision: number; onChanged: () => Promise<void>; onSelectRoom: (id: string) => void }
-type HistoryEntry = { graph: LayoutGraph; createdRoom?: Room; outdoorPoints?: Point[] }
+type Props = { propertyId: string; layoutWidthM: number; level: Level; levels: Level[]; floor: FloorPlan | undefined; floorUrl: string | null; rooms: Room[]; polygons: RoomPolygon[]; revision: number; onChanged: () => Promise<void>; onSelectRoom: (id: string) => void; review?: PlanReview }
+type HistoryEntry = { graph: LayoutGraph; createdRoom?: Room; outdoorPoints?: Point[]; reviewRooms?: Room[] }
 const roomOptions: { type: SpaceType; name: string }[] = [
   { type: 'living_room', name: 'Living room' }, { type: 'bedroom', name: 'Bedroom' }, { type: 'bathroom', name: 'Bathroom' },
   { type: 'kitchen', name: 'Kitchen' }, { type: 'dining_room', name: 'Dining room' }, { type: 'corridor', name: 'Corridor' },
@@ -43,9 +44,18 @@ function stairMarkings(stair: StairFeature): Point[][] {
   return lines
 }
 
-export function TopologyComposer({ propertyId, layoutWidthM, level, levels, floor, floorUrl, rooms, polygons, revision, onChanged, onSelectRoom }: Props) {
+export function TopologyComposer({ propertyId, layoutWidthM: savedWidth, level, levels, floor, floorUrl, rooms: savedRooms, polygons, revision, onChanged, onSelectRoom: selectSavedRoom, review }: Props) {
   const [graph, setGraph] = useState<LayoutGraph>(emptyGraph)
+  const [reviewRooms, setReviewRooms] = useState<Room[]>([])
+  const [reviewRoomId, setReviewRoomId] = useState<string | null>(null)
+  const [calibration, setCalibration] = useState<PlanCalibration | null>(null)
+  const [knownLength, setKnownLength] = useState('')
+  const [reviewOperations, setReviewOperations] = useState(0)
+  const reviewStarted = useRef(Date.now())
+  const rooms = review ? reviewRooms : savedRooms
+  const onSelectRoom = (id: string) => review ? setReviewRoomId(id) : selectSavedRoom(id)
   const [mode, setMode] = useState<Mode>('select')
+  const [partitionKind, setPartitionKind] = useState<'interior' | 'virtual'>('interior')
   const [roomType, setRoomType] = useState<SpaceType>('bedroom')
   const [outdoorType, setOutdoorType] = useState<SpaceType>('garden')
   const [draft, setDraft] = useState<Snap[]>([])
@@ -86,10 +96,16 @@ export function TopologyComposer({ propertyId, layoutWidthM, level, levels, floo
   const stage = useRef<Konva.Stage>(null)
   const height = Math.max(240, width * ((floor?.height || level.canvas_height) / (floor?.width || level.canvas_width) || .75))
   const aspect = (floor?.height || level.canvas_height) / (floor?.width || level.canvas_width)
+  const calibratedWall = calibration && graph.walls.find(wall => wall.id === calibration.wall_id)
+  const calibratedUnitLength = calibratedWall ? wallLengthM(graph, calibratedWall, 1, aspect) : 0
+  const layoutWidthM = review && calibration && calibratedUnitLength ? calibration.length_m / calibratedUnitLength : savedWidth
   const sx = (p: Point) => p.x * width, sy = (p: Point) => p.y * height
   const pointAt = (event: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => { const scene = event.target.getStage(), p = scene?.getPointerPosition(); if (!scene || !p) return null; const local = scene.getAbsoluteTransform().copy().invert().point(p); return { x: Math.max(0, Math.min(1, local.x / width)), y: Math.max(0, Math.min(1, local.y / height)) } }
 
-  useEffect(() => { let active = true; getLayoutGraph(level.id, propertyId).then(value => { if (active) { setGraph(value); setPast([]); setFuture([]); setDraft([]); setSelectedEdge(null); setSelectedOpening(null); setSelectedWall(null); setSelectedVertex(null); setSelectedStair(null) } }).catch(e => { if (active) setError(e.message) }); return () => { active = false } }, [level.id, propertyId, revision])
+  useEffect(() => {
+    if (review) { setGraph(structuredClone(review.graph)); setReviewRooms(structuredClone(review.rooms)); setPast([]); setFuture([]); setDraft([]); setCalibration(null); setReviewOperations(0); reviewStarted.current = Date.now(); return }
+    let active = true; getLayoutGraph(level.id, propertyId).then(value => { if (active) { setGraph(value); setPast([]); setFuture([]); setDraft([]); setSelectedEdge(null); setSelectedOpening(null); setSelectedWall(null); setSelectedVertex(null); setSelectedStair(null) } }).catch(e => { if (active) setError(e.message) }); return () => { active = false }
+  }, [level.id, propertyId, revision, review])
   useEffect(() => { if (!container.current) return; const observer = new ResizeObserver(entries => setWidth(Math.max(1, entries[0].contentRect.width))); observer.observe(container.current); return () => observer.disconnect() }, [])
   useEffect(() => { if (!floorUrl) { setImage(null); return }; const next = new Image(); next.onload = () => setImage(next); next.src = floorUrl; return () => { next.onload = null } }, [floorUrl])
   const regions = useMemo(() => faces(graph), [graph])
@@ -99,6 +115,10 @@ export function TopologyComposer({ propertyId, layoutWidthM, level, levels, floo
     next = { ...next, site_edges: (next.site_edges || []).filter(edge => rooms.some(room => room.id === edge.room_id && room.category === 'outdoor')) }
     const problem = next.walls.length ? validateGraph(next) : validateBoundary(next.property_boundary)
     if (problem) { setError(problem); return false }
+    if (review) {
+      setPast(value => [...value.slice(-29), { graph, reviewRooms }]); setFuture([]); setGraph(next); setDraft([]); setOpeningDraft(null); setNotice(message); setReviewOperations(value => value + 1)
+      return true
+    }
     setBusy(true); setError(''); setNotice('')
     try {
       await saveLayoutGraph(level.id, next)
@@ -110,6 +130,13 @@ export function TopologyComposer({ propertyId, layoutWidthM, level, levels, floo
   const history = async (direction: 'undo' | 'redo') => {
     const list = direction === 'undo' ? past : future, entry = list[list.length - 1]
     if (!entry) return
+    if (review) {
+      const snapshot = { graph, reviewRooms }
+      if (direction === 'undo') { setPast(list.slice(0,-1)); setFuture(value => [...value,snapshot]) }
+      else { setFuture(list.slice(0,-1)); setPast(value => [...value,snapshot]) }
+      setGraph(entry.graph); setReviewRooms(entry.reviewRooms || []); setDraft([]); setOpeningDraft(null); setReviewOperations(value => value + 1)
+      return
+    }
     setBusy(true); setError('')
     try {
       if (entry.createdRoom && direction === 'undo') {
@@ -130,7 +157,7 @@ export function TopologyComposer({ propertyId, layoutWidthM, level, levels, floo
   }
   const changeMode = (next: Mode) => { setMode(next); if (next === 'double_door') setDoorPreset('double'); if (next === 'wide_window') setWindowPreset('wide'); setDraft([]); setOpeningDraft(null); setHover(null); setCursor(null); setSelectedStair(null); setError(''); setNotice('') }
   const nearestWall = (p: Point, only?: Wall) => {
-    const candidates = only ? [only] : graph.walls
+    const candidates = (only ? [only] : graph.walls).filter(wall => wall.kind !== 'virtual')
     const ranked = candidates.map(w => { const t = wallParameter(graph, w, p), q = wallPoint(graph, w, t); return { wall: w, t, distance: Math.hypot((p.x - q.x) * width * view.scale, (p.y - q.y) * height * view.scale) } }).sort((a, b) => a.distance - b.distance)
     return ranked[0]?.distance <= 14 ? ranked[0] : null
   }
@@ -232,6 +259,11 @@ export function TopologyComposer({ propertyId, layoutWidthM, level, levels, floo
   const assignRoom = async (seed: Point) => {
     const option = roomOptions.find(item => item.type === roomType)!
     const count = rooms.filter(room => room.space_type === roomType).length
+    if (review) {
+      const created: Room = { id: crypto.randomUUID(), property_id: propertyId, level_id: level.id, name: count ? `${option.name} ${count+1}` : option.name, sort_order: rooms.length, space_type: roomType, category: 'indoor', height: 2.7, description: '', created_at: new Date().toISOString() }
+      if (await commit({ ...graph, rooms: [...graph.rooms, { room_id: created.id, point: seed }] }, `${option.name} added — choose another area or press Esc.`)) { setReviewRooms(value => [...value, created]); setReviewRoomId(created.id) }
+      return
+    }
     setBusy(true); setError('')
     let created: Room | null = null
     try {
@@ -264,7 +296,7 @@ export function TopologyComposer({ propertyId, layoutWidthM, level, levels, floo
         saved = await commit({ ...graph, property_boundary: points }, 'Property boundary saved.')
       }
       if (mode === 'building') saved = await commit(createBuilding(graph, points), 'Building walls traced. Draw partitions next.')
-      if (mode === 'partition') saved = await commit(addPartition(graph, draft), 'Partition added; select Add room and click the enclosed area.')
+      if (mode === 'partition') saved = await commit(addPartition(graph, draft, partitionKind), partitionKind === 'virtual' ? 'Open room boundary added — assign rooms on either side; no 3D wall is created.' : 'Partition added; select Add room and click the enclosed area.')
       if (mode === 'outdoor') saved = await addOutdoor(points)
       if (mode === 'stairs') {
         if (points.length !== 2) throw new Error('Click opposite corners of the stair footprint, then press Enter.')
@@ -286,6 +318,7 @@ export function TopologyComposer({ propertyId, layoutWidthM, level, levels, floo
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
   const addOutdoor = async (points: Point[]): Promise<boolean> => {
+    if (review) { setError('Accept the building candidate before adding outdoor spaces.'); return false }
     const buildingPolygon = building.length ? [{ id: 'building', points: building } as RoomPolygon] : []
     if (!validLayoutPolygon(points) || !graph.property_boundary.length || validateBoundary(points, graph.property_boundary) || overlapsAnother(points, [...polygons, ...buildingPolygon], null)) { setError('Outdoor space must be a valid non-overlapping area inside the property boundary and outside the building.'); return false }
     const option = outdoorOptions.find(item => item.type === outdoorType)!
@@ -438,16 +471,43 @@ export function TopologyComposer({ propertyId, layoutWidthM, level, levels, floo
   }
   const layerToggle = (name: LayerName) => setLayers(value => ({ ...value, [name]: !value[name] }))
   const selectedOpeningData = graph.openings.find(item => item.id === selectedOpening)
+  const selectedWallData = graph.walls.find(item => item.id === selectedWall)
   const selectedOpeningIsPath = Boolean(selectedOpeningData?.path_id && graph.openings.filter(item => item.path_id === selectedOpeningData.path_id).length > 1)
   const selectedStairData = (graph.stairs || []).find(item => item.id === selectedStair)
+  const reviewRoom = reviewRooms.find(room => room.id === reviewRoomId)
+  const evidenceColor = (id: string, category: 'walls' | 'openings' | 'junctions' | 'rooms') => { const score = review?.result.confidence?.[category]?.[id]?.confidence ?? .35; return score >= .8 ? '#20755d' : score >= .5 ? '#a76b10' : '#b54545' }
+  const updateReviewRoom = (patch: Partial<Pick<Room, 'name' | 'space_type'>>) => {
+    if (!reviewRoom) return
+    setPast(value => [...value.slice(-29), { graph, reviewRooms }]); setFuture([]); setReviewRooms(value => value.map(room => room.id === reviewRoom.id ? { ...room, ...patch } : room)); setReviewOperations(value => value+1)
+  }
+  const acceptReview = async () => {
+    if (!review || !calibration || !calibratedWall) return
+    setBusy(true); setError('')
+    try {
+      const next = preserveOpeningWidths(graph, layoutWidthM, aspect)
+      const problem = validatePlanCandidate(next); if (problem) throw new Error(problem)
+      await review.onAccept(next, reviewRooms, layoutWidthM, calibration, { operations: reviewOperations, seconds: Math.round((Date.now()-reviewStarted.current)/1000) })
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+  }
   const selectedEdgeData = selectedEdge && (graph.site_edges || []).find(item => item.room_id === selectedEdge.roomId && item.segment_index === selectedEdge.index)
   const selectedEdgeBehavior: EdgeBehavior = selectedEdgeData?.behavior || (selectedEdge && ['balcony', 'terrace'].includes(rooms.find(room => room.id === selectedEdge.roomId)?.space_type || '') ? 'railing' : 'open')
   const selectedEdgeHeight = selectedEdgeData?.height ?? (selectedEdgeBehavior === 'railing' ? 1.05 : selectedEdgeBehavior === 'parapet' ? .9 : selectedEdgeBehavior === 'wall' ? 2.7 : 0)
 
   return <div className="space-y-4">
+    {review && <div className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
+      <strong>Candidate review — edits stay in this review until accepted</strong>
+      <p>Green: strong evidence · amber: moderate · red: low or unresolved. These are evidence ratings, not calibrated probabilities. Check all walls and openings against the original image.</p>
+      <p>Select a wall and enter its known length to calibrate. Image dimensions alone do not establish real-world scale.</p>
+      <div className="flex flex-wrap items-center gap-2"><input aria-label="Known wall length metres" type="number" min="0.1" step="0.01" value={knownLength} onChange={e => setKnownLength(e.target.value)} placeholder="Known length (m)" className="w-40 rounded-lg border p-2"/><Button size="sm" disabled={!selectedWall || !Number.isFinite(Number(knownLength)) || Number(knownLength)<=0} onClick={() => setCalibration({ source: 'wall_measurement', wall_id: selectedWall!, length_m: Number(knownLength) })}>Calibrate selected wall</Button>{calibration && <span>Image width: {layoutWidthM.toFixed(2)} m</span>}</div>
+      <div className="flex flex-wrap gap-2"><Button size="sm" disabled={busy || !calibration || !calibratedWall || layoutWidthM<2 || layoutWidthM>100} onClick={() => void acceptReview()}>Accept detected layout</Button><Button size="sm" variant="outline" disabled={busy} onClick={review.onClose}>Close review without saving</Button></div>
+      {review.result.unresolved.length>0 && <p>{review.result.unresolved.length} ambiguous opening candidates were left out. Use Door, Window, or Entrance to place them on the correct wall after inspection.</p>}
+      <label className="flex flex-wrap items-center gap-2">Review room <select aria-label="Candidate room" value={reviewRoomId || ''} onChange={e => setReviewRoomId(e.target.value)} className="rounded-lg border p-2"><option value="">Choose an enclosed space</option>{reviewRooms.map(room => <option key={room.id} value={room.id}>{room.name}{room.space_type === 'other' ? ' · unresolved' : ''}</option>)}</select></label>
+      {reviewRoom && <div className="flex flex-wrap gap-2"><input aria-label="Candidate room name" key={`${reviewRoom.id}-name-${reviewRoom.name}`} defaultValue={reviewRoom.name} maxLength={80} onBlur={e => { if (e.target.value.trim() && e.target.value.trim() !== reviewRoom.name) updateReviewRoom({ name: e.target.value.trim() }) }} className="rounded-lg border p-2"/><select aria-label="Candidate room type" value={reviewRoom.space_type} onChange={e => updateReviewRoom({ space_type: e.target.value as SpaceType })} className="rounded-lg border p-2"><option value="other">Unresolved / other</option>{roomOptions.map(option => <option key={option.type} value={option.type}>{option.name}</option>)}</select><Button size="sm" variant="outline" onClick={() => { void commit({ ...graph, rooms: graph.rooms.filter(seed => seed.room_id !== reviewRoom.id) }, 'Room assignment removed.').then(saved => { if (saved) { setReviewRooms(value => value.filter(room => room.id !== reviewRoom.id)); setReviewRoomId(null) } }) }}>Leave face unassigned</Button></div>}
+    </div>}
     <div className="space-y-2" role="toolbar" aria-label="Layout drawing modes">
-      {([['Select', [['select','Select']]], ['Draw', [['property','Property boundary'],['building','Building boundary'],['partition','Partition'],['room','Add room'],['outdoor','Outdoor space'],['stairs','Stairs']]], ['Openings', [['door','Door'],['double_door','Double door'],['window','Window'],['wide_window','Wide window'],['entrance','Entrance']]]] as [string, [Mode,string][]][]).map(([group, tools]) => <div key={group} className="flex flex-wrap items-center gap-2"><span className="w-16 text-[10px] font-bold uppercase tracking-widest text-slate-500">{group}</span>{tools.map(([value,label]) => <button key={value} type="button" aria-pressed={mode === value} disabled={busy || (value === 'building' && graph.walls.length > 0)} onClick={() => changeMode(value)} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${mode === value ? 'border-pine bg-pine text-white' : 'border-line bg-white hover:bg-mint'}`}>{label}</button>)}</div>)}
+      {([['Select', [['select','Select']]], ['Draw', [['property','Property boundary'],['building','Building boundary'],['partition','Partition'],['room','Add room'],['outdoor','Outdoor space'],['stairs','Stairs']]], ['Openings', [['door','Door'],['double_door','Double door'],['window','Window'],['wide_window','Wide window'],['entrance','Entrance']]]] as [string, [Mode,string][]][]).map(([group, tools]) => <div key={group} className="flex flex-wrap items-center gap-2"><span className="w-16 text-[10px] font-bold uppercase tracking-widest text-slate-500">{group}</span>{tools.map(([value,label]) => <button key={value} type="button" aria-pressed={mode === value} disabled={busy || Boolean(review && (value === 'property' || value === 'outdoor')) || (value === 'building' && graph.walls.length > 0)} onClick={() => changeMode(value)} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${mode === value ? 'border-pine bg-pine text-white' : 'border-line bg-white hover:bg-mint'}`}>{label}</button>)}</div>)}
     </div>
+    {mode === 'partition' && <label className="flex items-center gap-2 text-sm">Partition type <select aria-label="Partition type" value={partitionKind} onChange={e => setPartitionKind(e.target.value as 'interior' | 'virtual')} className="rounded-lg border border-line p-2"><option value="interior">Physical wall</option><option value="virtual">Open room boundary · no wall</option></select></label>}
     <div className="flex flex-wrap items-center gap-2 text-xs" aria-label="Precision drawing controls">
       <span className="font-bold uppercase tracking-widest text-slate-500">Precision</span>
       <button type="button" aria-pressed={ortho} title="O · Shift temporarily reverses Ortho" onClick={() => setOrtho(value => !value)} className={`rounded-lg border px-3 py-2 font-semibold ${ortho ? 'border-pine bg-mint text-pine' : 'border-line bg-white'}`}>Ortho {ortho ? 'ON' : 'OFF'}</button>
@@ -467,13 +527,14 @@ export function TopologyComposer({ propertyId, layoutWidthM, level, levels, floo
       {layers.background && image && <KonvaImage image={image} width={width} height={height} listening={false}/>}
       {Array.from({ length: 39 }, (_, i) => <Line key={`grid-${i}`} points={[(i+1)*.025*width,0,(i+1)*.025*width,height]} stroke="#205c5713" strokeWidth={1} listening={false}/>)}
       {layers.property && graph.property_boundary.length > 2 && <Line points={graph.property_boundary.flatMap(p => [sx(p),sy(p)])} closed stroke="#80619c" strokeWidth={3} strokeScaleEnabled={false} dash={[10,5]} listening={false}/>}
-      {layers.spaces && regions.map(face => { const center = faceCenter(face), room = rooms.find(item => item.id === face.room_id); return <Fragment key={face.key}><Line points={face.points.flatMap(p => [sx(p),sy(p)])} closed fill={room ? '#20837433' : '#d8a34b22'} strokeEnabled={false} onClick={() => { if (mode === 'select' && room) onSelectRoom(room.id) }}/><Text x={sx(center)-55} y={sy(center)-8} width={110} align="center" text={room?.name || 'Unassigned'} fontSize={12} fill="#173939" listening={false}/></Fragment> })}
+      {layers.spaces && regions.map(face => { const center = faceCenter(face), room = rooms.find(item => item.id === face.room_id); return <Fragment key={face.key}><Line points={face.points.flatMap(p => [sx(p),sy(p)])} closed fill={review && room ? `${evidenceColor(room.id, 'rooms')}33` : room ? '#20837433' : '#d8a34b22'} strokeEnabled={false} onClick={() => { if (mode === 'select' && room) onSelectRoom(room.id) }}/><Text x={sx(center)-55} y={sy(center)-8} width={110} align="center" text={room?.name || 'Unassigned'} fontSize={12} fill="#173939" listening={false}/></Fragment> })}
       {layers.spaces && polygons.filter(p => rooms.some(r => r.id === p.room_id && r.category === 'outdoor')).map(p => <Fragment key={p.id}><Line points={p.points.flatMap(q => [sx(q),sy(q)])} closed fill="#80b07144" strokeEnabled={false} listening={false}/>{p.points.map((a, index) => { const b = p.points[(index + 1) % p.points.length], edge = (graph.site_edges || []).find(item => item.room_id === p.room_id && item.segment_index === index), type = rooms.find(r => r.id === p.room_id)?.space_type, behavior = edge?.behavior || (type === 'balcony' || type === 'terrace' ? 'railing' : 'open'); return <Line key={`${p.id}-${index}`} points={[sx(a),sy(a),sx(b),sy(b)]} stroke={selectedEdge?.roomId === p.room_id && selectedEdge.index === index ? '#e17831' : behavior === 'railing' ? '#347c99' : behavior === 'open' ? '#4b8a66' : '#595a66'} dash={behavior === 'open' ? [5,5] : undefined} strokeWidth={3} strokeScaleEnabled={false} hitStrokeWidth={20} onClick={e => { if (mode === 'select') { e.cancelBubble = true; setSelectedEdge({ roomId: p.room_id, index }); setSelectedWall(null); setSelectedOpening(null); setSelectedVertex(null); setSelectedStair(null) } }}/>} )}</Fragment>)}
       {(graph.stairs || []).filter(item => item.source_level_id === level.id).map(stair => { const cx = stair.footprint.reduce((sum,p) => sum + p.x,0)/4, cy = stair.footprint.reduce((sum,p) => sum + p.y,0)/4; return <Fragment key={`stair-${stair.id}`}><Line points={stair.footprint.flatMap(p => [sx(p),sy(p)])} closed fill="#8e88b322" stroke={selectedStair === stair.id ? '#e17831' : '#735b9e'} strokeWidth={3} strokeScaleEnabled={false} hitStrokeWidth={18} onClick={e => { if (mode === 'select') { e.cancelBubble = true; setSelectedStair(stair.id); setSelectedOpening(null); setSelectedWall(null); setSelectedVertex(null); setSelectedEdge(null) } }}/>{stairMarkings(stair).map((line,index) => <Line key={index} points={line.flatMap(p => [sx(p),sy(p)])} stroke="#735b9e" strokeWidth={1.5} strokeScaleEnabled={false} listening={false}/>)}<Text x={sx({x:cx,y:cy})-20/view.scale} y={sy({x:cx,y:cy})-7/view.scale} text={`${({ north:'↑', east:'→', south:'↓', west:'←' } as const)[stair.direction]} UP`} fontSize={12/view.scale} fill="#4e3479" listening={false}/></Fragment> })}
-      {graph.walls.filter(w => w.kind !== 'exterior' ? layers.spaces : layers.building).map(w => { const a = wallPoint(graph,w,0), b = wallPoint(graph,w,1); return <Line key={w.id} points={[sx(a),sy(a),sx(b),sy(b)]} stroke={selectedWall === w.id ? '#e17831' : w.kind === 'exterior' ? '#173939' : '#386661'} strokeWidth={w.kind === 'exterior' ? 6 : 4} strokeScaleEnabled={false} hitStrokeWidth={18} dash={w.kind === 'virtual' ? [8,5] : undefined} draggable={mode === 'select' && w.kind === 'interior' && !busy} onClick={e => { if (mode === 'select') { e.cancelBubble = true; setSelectedWall(w.id); setSelectedOpening(null); setSelectedVertex(null); setSelectedEdge(null); setSelectedStair(null) } }} onTap={e => { if (mode === 'select') { e.cancelBubble = true; setSelectedWall(w.id); setSelectedOpening(null); setSelectedVertex(null); setSelectedEdge(null); setSelectedStair(null) } }} onDragEnd={e => { const delta = { x: e.target.x() / width, y: e.target.y() / height }; e.target.position({ x: 0, y: 0 }); moveWall(w, delta) }}/> })}
-      {graph.openings.map(o => { const wall = graph.walls.find(w => w.id === o.wall_id); if (!wall || !(o.type === 'entrance' || o.type.includes('door') ? layers.doors : layers.windows)) return null; const a = wallPoint(graph,wall,o.start), b = wallPoint(graph,wall,o.end), door = o.type.includes('door'); return <Fragment key={o.id}><Line points={[sx(a),sy(a),sx(b),sy(b)]} stroke={o.type === 'entrance' ? '#9b5c9b' : door ? '#ad552f' : '#2788ae'} dash={o.type === 'entrance' ? [8,3] : undefined} strokeWidth={7} strokeScaleEnabled={false} hitStrokeWidth={20} draggable={mode === 'select' && !busy && !(o.path_id && graph.openings.filter(item => item.path_id === o.path_id).length > 1)} onClick={e => { if (mode === 'select') { e.cancelBubble = true; setSelectedOpening(o.id); setSelectedWall(null); setSelectedVertex(null); setSelectedEdge(null); setSelectedStair(null) } }} onTap={e => { if (mode === 'select') { e.cancelBubble = true; setSelectedOpening(o.id); setSelectedWall(null); setSelectedVertex(null); setSelectedEdge(null); setSelectedStair(null) } }} onDragEnd={e => { const middle = wallPoint(graph, wall, (o.start + o.end) / 2); const moved = { x: middle.x + e.target.x() / width, y: middle.y + e.target.y() / height }; e.target.position({ x: 0, y: 0 }); moveOpening(o, moved) }}/>{o.type === 'entrance' && selectedOpening === o.id && !(o.path_id && graph.openings.filter(item => item.path_id === o.path_id).length > 1) && (['start','end'] as const).map(side => { const p = wallPoint(graph,wall,o[side]); return <Circle key={side} x={sx(p)} y={sy(p)} radius={6 / view.scale} fill="white" stroke="#9b5c9b" strokeWidth={2} strokeScaleEnabled={false} draggable onDragEnd={e => { const moved = { x: e.target.x()/width, y: e.target.y()/height }; e.target.position({x:sx(p),y:sy(p)}); resizeEntrance(o,side,moved) }}/>} )}</Fragment> })}
+      {graph.walls.filter(w => w.kind !== 'exterior' ? layers.spaces : layers.building).map(w => { const a = wallPoint(graph,w,0), b = wallPoint(graph,w,1); return <Line key={w.id} points={[sx(a),sy(a),sx(b),sy(b)]} stroke={selectedWall === w.id ? '#e17831' : review ? evidenceColor(w.id, 'walls') : w.kind === 'exterior' ? '#173939' : '#386661'} strokeWidth={w.kind === 'exterior' ? 6 : 4} strokeScaleEnabled={false} hitStrokeWidth={18} dash={w.kind === 'virtual' ? [8,5] : undefined} draggable={mode === 'select' && w.kind !== 'exterior' && !busy} onClick={e => { if (mode === 'select') { e.cancelBubble = true; setSelectedWall(w.id); setSelectedOpening(null); setSelectedVertex(null); setSelectedEdge(null); setSelectedStair(null) } }} onTap={e => { if (mode === 'select') { e.cancelBubble = true; setSelectedWall(w.id); setSelectedOpening(null); setSelectedVertex(null); setSelectedEdge(null); setSelectedStair(null) } }} onDragEnd={e => { const delta = { x: e.target.x() / width, y: e.target.y() / height }; e.target.position({ x: 0, y: 0 }); moveWall(w, delta) }}/> })}
+      {graph.openings.map(o => { const wall = graph.walls.find(w => w.id === o.wall_id); if (!wall || !(o.type === 'entrance' || o.type.includes('door') ? layers.doors : layers.windows)) return null; const a = wallPoint(graph,wall,o.start), b = wallPoint(graph,wall,o.end), door = o.type.includes('door'); return <Fragment key={o.id}><Line points={[sx(a),sy(a),sx(b),sy(b)]} stroke={review ? evidenceColor(o.id, 'openings') : o.type === 'entrance' ? '#9b5c9b' : door ? '#ad552f' : '#2788ae'} dash={o.type === 'entrance' ? [8,3] : undefined} strokeWidth={7} strokeScaleEnabled={false} hitStrokeWidth={20} draggable={mode === 'select' && !busy && !(o.path_id && graph.openings.filter(item => item.path_id === o.path_id).length > 1)} onClick={e => { if (mode === 'select') { e.cancelBubble = true; setSelectedOpening(o.id); setSelectedWall(null); setSelectedVertex(null); setSelectedEdge(null); setSelectedStair(null) } }} onTap={e => { if (mode === 'select') { e.cancelBubble = true; setSelectedOpening(o.id); setSelectedWall(null); setSelectedVertex(null); setSelectedEdge(null); setSelectedStair(null) } }} onDragEnd={e => { const middle = wallPoint(graph, wall, (o.start + o.end) / 2); const moved = { x: middle.x + e.target.x() / width, y: middle.y + e.target.y() / height }; e.target.position({ x: 0, y: 0 }); moveOpening(o, moved) }}/>{o.type === 'entrance' && selectedOpening === o.id && !(o.path_id && graph.openings.filter(item => item.path_id === o.path_id).length > 1) && (['start','end'] as const).map(side => { const p = wallPoint(graph,wall,o[side]); return <Circle key={side} x={sx(p)} y={sy(p)} radius={6 / view.scale} fill="white" stroke="#9b5c9b" strokeWidth={2} strokeScaleEnabled={false} draggable onDragEnd={e => { const moved = { x: e.target.x()/width, y: e.target.y()/height }; e.target.position({x:sx(p),y:sy(p)}); resizeEntrance(o,side,moved) }}/>} )}</Fragment> })}
       {graph.openings.filter(o => o.type.includes('door') && layers.doors).map(o => { const w = graph.walls.find(item => item.id === o.wall_id); return w && <Line key={`arc-${o.id}`} points={swingArc(o,w)} stroke="#ad552f" strokeWidth={2} strokeScaleEnabled={false} dash={[5,4]} listening={false}/> })}
       {mode === 'select' && graph.vertices.map(v => <Circle key={v.id} x={sx(v)} y={sy(v)} radius={(graph.building_boundary.includes(v.id) ? 6 : 5) / view.scale} fill={selectedVertex === v.id ? '#e17831' : 'white'} stroke="#174e4b" strokeWidth={2} strokeScaleEnabled={false} hitStrokeWidth={16} draggable={!busy && (!buildingLocked || !graph.building_boundary.includes(v.id))} onDragEnd={e => { const p = { x: Math.max(0,Math.min(1,e.target.x()/width)), y: Math.max(0,Math.min(1,e.target.y()/height)) }; e.target.position({ x:sx(v),y:sy(v) }); moveVertex(v.id,p) }} onClick={e => { e.cancelBubble = true; setSelectedVertex(v.id); setSelectedWall(null); setSelectedOpening(null); setSelectedEdge(null); setSelectedStair(null) }}/>) }
+      {review?.result.unresolved.map((item,index) => item.points && <Fragment key={`unresolved-${index}`}><Line points={item.points.flatMap(p => [sx(p),sy(p)])} closed stroke="#b54545" strokeWidth={2} dash={[5,4]} listening={false}/><Text x={sx(item.points[0])} y={sy(item.points[0])-14} text={`Review ${item.kind}`} fontSize={11} fill="#b54545" listening={false}/></Fragment>)}
       {draft.length > 0 && <Line points={draft.flatMap(item => [sx(item.point),sy(item.point)])} stroke="#e17b3e" strokeWidth={3} strokeScaleEnabled={false} dash={[7,5]} listening={false}/>}
       {draft.length > 0 && hover && <Line points={[sx(draft[draft.length-1].point),sy(draft[draft.length-1].point),sx(hover.point),sy(hover.point)]} stroke="#e17b3e" strokeWidth={2} strokeScaleEnabled={false} dash={[4,4]} listening={false}/>}
       {draft.length > 0 && hover && <Text x={sx(hover.point) + 10 / view.scale} y={sy(hover.point) - 18 / view.scale} text={`${Math.round(Math.atan2((hover.point.y-draft[draft.length-1].point.y)*height,(hover.point.x-draft[draft.length-1].point.x)*width)*180/Math.PI)}°`} fontSize={11 / view.scale} fill="#ad552f" listening={false}/>}
@@ -485,6 +546,11 @@ export function TopologyComposer({ propertyId, layoutWidthM, level, levels, floo
       {openingDraft?.end !== undefined && <Circle x={sx(wallPoint(graph,openingDraft.wall,openingDraft.end))} y={sy(wallPoint(graph,openingDraft.wall,openingDraft.end))} radius={7 / view.scale} fill="#e17b3e" listening={false}/>}
     </Layer></Stage></div>
     <div className="flex flex-wrap gap-2"><Button size="sm" title="Enter" disabled={busy || !draft.length || (mode === 'partition' ? draft.length < 2 || !['wall','vertex'].includes(draft[draft.length-1].kind) : mode === 'stairs' ? draft.length !== 2 : draft.length < 3)} onClick={finishDraft}>Finish {mode === 'partition' ? 'partition' : mode === 'stairs' ? 'stair' : 'boundary / area'} · Enter</Button><Button size="sm" variant="outline" disabled={!draft.length} onClick={() => setDraft(value => value.slice(0,-1))}>Undo point</Button><Button size="sm" variant="outline" title="Esc" onClick={cancelCurrent}>{draft.length || openingDraft ? 'Cancel draft · Esc' : 'Exit tool · Esc'}</Button><Button size="sm" variant="outline" disabled={busy || !past.length} onClick={() => void history('undo')}>Undo</Button><Button size="sm" variant="outline" disabled={busy || !future.length} onClick={() => void history('redo')}>Redo</Button><Button size="sm" variant="danger" disabled={busy || (!selectedOpening && !selectedWall && !selectedStair)} onClick={deleteSelected}>Delete selected</Button></div>
+    {selectedWallData && selectedWallData.kind !== 'exterior' && <label className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-white p-3 text-sm">Selected boundary <select aria-label="Selected boundary type" value={selectedWallData.kind} className="rounded-lg border p-2" onChange={e => {
+      const kind = e.target.value as 'interior' | 'virtual'
+      if (kind === 'virtual' && graph.openings.some(o => o.wall_id === selectedWallData.id)) { setError('Remove physical openings before changing this wall to an open room boundary.'); return }
+      void commit({ ...graph, walls: graph.walls.map(w => w.id === selectedWallData.id ? { ...w, kind } : w) }, kind === 'virtual' ? 'Open room boundary saved; the 3D wall is omitted.' : 'Physical partition wall saved.')
+    }}><option value="interior">Physical wall</option><option value="virtual">Open room boundary · no wall</option></select></label>}
     {selectedOpeningData && <div className="flex flex-wrap items-end gap-3 rounded-xl border border-line bg-white p-3 text-sm">
       <strong className="w-full">Selected {selectedOpeningData.type.replaceAll('_',' ')}{selectedOpeningIsPath ? ' · connected wall path' : ''}</strong>
       {selectedOpeningIsPath ? <p>{selectedOpeningData.type === 'entrance' ? 'Full-height passage' : 'Opening'} across {graph.openings.filter(item => item.path_id === selectedOpeningData.path_id).length} connected wall segments. Delete and redraw to change its endpoints.</p> : <>

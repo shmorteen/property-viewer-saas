@@ -1,0 +1,4 @@
+{
+  "description": "No real human-verified benchmark pairs are bundled. Synthetic unit tests are not gold-standard evaluation.",
+  "fixtures": []
+}

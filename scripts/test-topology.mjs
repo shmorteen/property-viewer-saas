@@ -29,6 +29,12 @@ assert.ok(rounded.building_boundary.length > graph0.building_boundary.length)
 assert.equal(faces(rounded).length, 1)
 assert.ok(rounded.walls.some(w => w.fillet_id), 'Arc segments persist in the graph')
 const firstWall = graph0.walls[0]
+const openPartition = addPartition(graph0, [snapToGraph(graph0,{x:.5,y:.1},1200,900,false),snapToGraph(graph0,{x:.5,y:.9},1200,900,false)], 'virtual')
+assert.equal(validateGraph(openPartition), null)
+assert.equal(faces(openPartition).length, 2, 'Open boundaries separate room faces')
+assert.equal(openPartition.walls.filter(w => w.kind === 'virtual').length, 1)
+const virtualHost = openPartition.walls.find(w => w.kind === 'virtual')
+assert.match(validateGraph({...openPartition,openings:[{id:crypto.randomUUID(),wall_id:virtualHost.id,type:'standard_window',start:.2,end:.4,height:1.2,sill:.9,swing:1}]}), /physical wall/)
 const splitGraph = structuredClone(graph0)
 const thirdA = { id: crypto.randomUUID(), x: .36, y: .1 }, thirdB = { id: crypto.randomUUID(), x: .64, y: .1 }
 splitGraph.vertices.push(thirdA, thirdB)

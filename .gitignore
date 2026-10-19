@@ -11,3 +11,5 @@ supabase/.temp/
 services/reconstruction/.venv/
 __pycache__/
 .pytest_cache/
+
+services/reconstruction/models/

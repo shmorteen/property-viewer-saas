@@ -1,0 +1,12 @@
+{
+  "split": "held-out",
+  "cases": [],
+  "production_ready": false,
+  "status": "no_verified_fixtures",
+  "semantic_comparison": "not run unless a licensed model manifest is configured",
+  "correction_time": "Only operator-recorded correction_seconds is reported; no fabricated time estimates.",
+  "reference_counts": {
+    "authored_analytic": 0,
+    "human_verified": 0
+  }
+}

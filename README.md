@@ -111,3 +111,25 @@ After Netlify assigns the permanent HTTPS origin, set the Supabase Edge Function
 - `supabase/seed.sql` and `public/demo/`: sample public tour
 
 The tour response is a presentation payload assembled at the backend edge. The Python worker consumes ordered levels, shared wall graphs, derived room areas, heights, openings, and linked photos and exports a GLB with room and wall IDs. Future photographic reconstruction is outlined in `NEXT_PHASE.md`.
+
+
+## Experimental floor-plan analysis
+
+Upload an original PNG/JPEG/WebP for one level, then choose **Analyze plan**.
+The existing reconstruction worker processes the candidate queue. Review uses
+the same Layout Composer with local changes until **Accept detected layout**.
+Acceptance requires an empty level and a selected wall's known real-world length;
+existing layouts are preserved. Failed/rejected analysis leaves live geometry intact.
+Original/normalized diagnostics remain private in `plan-analysis` storage.
+
+Use **Partition → Open room boundary · no wall** to separate open-plan room areas.
+These virtual edges define room faces without generating a physical wall. Doors
+and windows require physical walls. Interior edges can also be converted from the
+selected-wall inspector when no opening is attached.
+
+Install updated worker requirements and apply Supabase migrations before use.
+See [model setup](services/reconstruction/plan_parser/MODELS.md),
+[benchmark instructions](services/reconstruction/tests/plan_parser/README.md), and
+[evaluation status](PLAN_PARSER_EVALUATION.md). The semantic model is a server-side
+ONNX file, not a frontend dependency. Without configured weights the UI explicitly
+reports CV-only mode. This feature is experimental; held-out accuracy is unverified.
