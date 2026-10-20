@@ -7,6 +7,7 @@ import { OPENING_WIDTHS_M, OPENING_WIDTH_BOUNDS_M, addPartition, contains, creat
 import type { FloorPlan, Level, Point, Room, RoomPolygon, SpaceType } from '../lib/types'
 import { Button } from './ui'
 import { validatePlanCandidate, type PlanCalibration, type PlanReview } from '../lib/plan-analysis'
+import { errorMessage } from '../lib/errors'
 
 type Mode = 'select' | 'property' | 'building' | 'partition' | 'room' | 'door' | 'double_door' | 'window' | 'wide_window' | 'entrance' | 'outdoor' | 'stairs'
 type LayerName = 'property' | 'building' | 'spaces' | 'doors' | 'windows' | 'background'
@@ -104,14 +105,14 @@ export function TopologyComposer({ propertyId, layoutWidthM: savedWidth, level, 
 
   useEffect(() => {
     if (review) { setGraph(structuredClone(review.graph)); setReviewRooms(structuredClone(review.rooms)); setPast([]); setFuture([]); setDraft([]); setCalibration(null); setReviewOperations(0); reviewStarted.current = Date.now(); return }
-    let active = true; getLayoutGraph(level.id, propertyId).then(value => { if (active) { setGraph(value); setPast([]); setFuture([]); setDraft([]); setSelectedEdge(null); setSelectedOpening(null); setSelectedWall(null); setSelectedVertex(null); setSelectedStair(null) } }).catch(e => { if (active) setError(e.message) }); return () => { active = false }
+    let active = true; getLayoutGraph(level.id, propertyId).then(value => { if (active) { setGraph(value); setPast([]); setFuture([]); setDraft([]); setSelectedEdge(null); setSelectedOpening(null); setSelectedWall(null); setSelectedVertex(null); setSelectedStair(null) } }).catch(e => { if (active) setError(errorMessage(e)) }); return () => { active = false }
   }, [level.id, propertyId, revision, review])
   useEffect(() => { if (!container.current) return; const observer = new ResizeObserver(entries => setWidth(Math.max(1, entries[0].contentRect.width))); observer.observe(container.current); return () => observer.disconnect() }, [])
   useEffect(() => { if (!floorUrl) { setImage(null); return }; const next = new Image(); next.onload = () => setImage(next); next.src = floorUrl; return () => { next.onload = null } }, [floorUrl])
   const regions = useMemo(() => faces(graph), [graph])
   const building = useMemo(() => footprint(graph), [graph])
   const commit = async (next: LayoutGraph, message: string) => {
-    try { next = preserveOpeningWidths(next, layoutWidthM, aspect) } catch (e) { setError(e instanceof Error ? e.message : String(e)); return false }
+    try { next = preserveOpeningWidths(next, layoutWidthM, aspect) } catch (e) { setError(errorMessage(e)); return false }
     next = { ...next, site_edges: (next.site_edges || []).filter(edge => rooms.some(room => room.id === edge.room_id && room.category === 'outdoor')) }
     const problem = next.walls.length ? validateGraph(next) : validateBoundary(next.property_boundary)
     if (problem) { setError(problem); return false }
@@ -125,7 +126,7 @@ export function TopologyComposer({ propertyId, layoutWidthM: savedWidth, level, 
       setPast(value => [...value.slice(-29), { graph }]); setFuture([]); setGraph(next); setDraft([]); setOpeningDraft(null); setNotice(message)
       await onChanged()
       return true
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); return false } finally { setBusy(false) }
+    } catch (e) { setError(errorMessage(e)); return false } finally { setBusy(false) }
   }
   const history = async (direction: 'undo' | 'redo') => {
     const list = direction === 'undo' ? past : future, entry = list[list.length - 1]
@@ -153,7 +154,7 @@ export function TopologyComposer({ propertyId, layoutWidthM: savedWidth, level, 
       if (direction === 'undo') { setPast(list.slice(0, -1)); setFuture(value => [...value, { graph, createdRoom: entry.createdRoom, outdoorPoints: entry.outdoorPoints }]) }
       else { setFuture(list.slice(0, -1)); setPast(value => [...value, { graph, createdRoom: entry.createdRoom, outdoorPoints: entry.outdoorPoints }]) }
       setGraph(entry.graph); await onChanged()
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   const changeMode = (next: Mode) => { setMode(next); if (next === 'double_door') setDoorPreset('double'); if (next === 'wide_window') setWindowPreset('wide'); setDraft([]); setOpeningDraft(null); setHover(null); setCursor(null); setSelectedStair(null); setError(''); setNotice('') }
   const nearestWall = (p: Point, only?: Wall) => {
@@ -272,7 +273,7 @@ export function TopologyComposer({ propertyId, layoutWidthM: savedWidth, level, 
       const problem = validateGraph(next); if (problem) throw new Error(problem)
       await saveLayoutGraph(level.id, next)
       setPast(value => [...value.slice(-29), { graph, createdRoom: created! }]); setFuture([]); setGraph(next); onSelectRoom(created.id); await onChanged(); setNotice(`${option.name} added — choose another enclosed area or press Esc to finish.`)
-    } catch (e) { if (created) await deleteRoom(created.id).catch(() => {}); setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+    } catch (e) { if (created) await deleteRoom(created.id).catch(() => {}); setError(errorMessage(e)) } finally { setBusy(false) }
   }
   const finishDraft = async () => {
     const points = draft.map(item => item.point)
@@ -315,7 +316,7 @@ export function TopologyComposer({ propertyId, layoutWidthM: savedWidth, level, 
         saved = await commit({ ...graph, stairs: [...(graph.stairs || []), stair] }, 'Stair added — draw another or press Esc to finish.')
       }
       if (saved) { setDraft([]); setOpeningDraft(null); if (mode === 'property' || mode === 'building') setMode('select') }
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    } catch (e) { setError(errorMessage(e)) }
   }
   const addOutdoor = async (points: Point[]): Promise<boolean> => {
     if (review) { setError('Accept the building candidate before adding outdoor spaces.'); return false }
@@ -329,7 +330,7 @@ export function TopologyComposer({ propertyId, layoutWidthM: savedWidth, level, 
       await savePolygon({ room_id: created.id, level_id: level.id, floor_plan_id: floor?.id || null, points })
       setPast(value => [...value.slice(-29), { graph, createdRoom: created!, outdoorPoints: points }]); setFuture([])
       onSelectRoom(created.id); await onChanged(); setNotice(`${option.name} added — draw another or press Esc to finish.`); return true
-    } catch (e) { if (created) await deleteRoom(created.id).catch(() => {}); setError(e instanceof Error ? e.message : String(e)); return false } finally { setBusy(false) }
+    } catch (e) { if (created) await deleteRoom(created.id).catch(() => {}); setError(errorMessage(e)); return false } finally { setBusy(false) }
   }
   const moveVertex = (id: string, p: Point) => {
     const vertex = graph.vertices.find(v => v.id === id)!
@@ -421,7 +422,7 @@ export function TopologyComposer({ propertyId, layoutWidthM: savedWidth, level, 
     if (!selectedVertex) { setError('Select an exterior corner first.'); return }
     if (buildingLocked) { setError('Unlock the building boundary to round a corner.'); return }
     try { void commit(filletCorner(graph, selectedVertex, filletRadius, layoutWidthM, aspect), 'Corner rounded with connected walls.'); setSelectedVertex(null) }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    catch (e) { setError(errorMessage(e)) }
   }
   const zoomTo = (scale: number, center = { x: width / 2, y: height / 2 }) => {
     const bounded = Math.max(.5, Math.min(5, scale))
@@ -487,7 +488,7 @@ export function TopologyComposer({ propertyId, layoutWidthM: savedWidth, level, 
       const next = preserveOpeningWidths(graph, layoutWidthM, aspect)
       const problem = validatePlanCandidate(next); if (problem) throw new Error(problem)
       await review.onAccept(next, reviewRooms, layoutWidthM, calibration, { operations: reviewOperations, seconds: Math.round((Date.now()-reviewStarted.current)/1000) })
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   const selectedEdgeData = selectedEdge && (graph.site_edges || []).find(item => item.room_id === selectedEdge.roomId && item.segment_index === selectedEdge.index)
   const selectedEdgeBehavior: EdgeBehavior = selectedEdgeData?.behavior || (selectedEdge && ['balcony', 'terrace'].includes(rooms.find(room => room.id === selectedEdge.roomId)?.space_type || '') ? 'railing' : 'open')

@@ -4,7 +4,7 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY
 export const configured = Boolean(url && key && !url.includes('YOUR_PROJECT'))
 export const supabase = createClient(url || 'https://example.supabase.co', key || 'missing-key', { auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true } })
 export const appUrl = window.location.origin
-export function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error) }
+export { errorMessage } from './errors'
 async function functionErrorMessage(error: Error): Promise<string> {
   const response = (error as Error & { context?: unknown }).context
   if (response instanceof Response) {

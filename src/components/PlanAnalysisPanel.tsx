@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getLayoutGraph, signedUrl } from '../lib/data'
-import { acceptPlanExtraction, isReviewablePlan, latestPlanExtraction, queuePlanExtraction, rejectPlanExtraction, validatePlanCandidate, type PlanExtraction, type PlanReview } from '../lib/plan-analysis'
+import { acceptPlanExtraction, isReviewablePlan, latestPlanExtraction, planExtractionWasAccepted, queuePlanExtraction, rejectPlanExtraction, validatePlanCandidate, verifyPlanAcceptance, type PlanExtraction, type PlanReview } from '../lib/plan-analysis'
+import { completePlanAcceptance } from '../lib/plan-acceptance'
+import { preparePlanReview } from '../lib/plan-review'
 import { errorMessage } from '../lib/supabase'
 import type { FloorPlan, Level, Property } from '../lib/types'
 import { Button, Card } from './ui'
@@ -21,13 +23,22 @@ export function PlanAnalysisPanel({ property, level, levels, floor, floorUrl, on
     setBusy(true); setError('')
     try {
       const current = await getLayoutGraph(level.id, property.id)
-      const graph = { ...structuredClone(job.result.graph), property_boundary: current.property_boundary }
+      const result = preparePlanReview(job.result, current.property_boundary)
+      const graph = result.graph
       const problem = validatePlanCandidate(graph); if (problem) throw new Error(problem)
-      const result = job.result
       const rooms = result.room_candidates.map((room, index) => ({ id: room.id, property_id: property.id, level_id: level.id, name: room.name,
         description: '', sort_order: index, space_type: room.space_type, category: 'indoor' as const, height: 2.7, created_at: job.created_at }))
+      const progress = { saved: false }
+      let savedPayload: string | null = null
       setReview({ id: job.id, graph, rooms, result, onClose: close, onAccept: async (...args) => {
-        await acceptPlanExtraction(job.id, ...args); close(); await onChanged(); await refresh()
+        const signature = JSON.stringify(args.slice(0, 4))
+        if (progress.saved && savedPayload !== signature) throw new Error('This review was already saved. Close review and reload the persisted layout before making further changes.')
+        await completePlanAcceptance(progress, {
+          save: async () => { await acceptPlanExtraction(job.id, ...args); savedPayload = signature },
+          hasSaved: async () => { const accepted = await planExtractionWasAccepted(job.id); if (accepted) savedPayload = signature; return accepted },
+          verify: () => verifyPlanAcceptance(property.id, level.id, args[0], args[1], args[2]),
+          reload: async () => { await onChanged(); setJob(await latestPlanExtraction(level.id)) }, close,
+        })
       } }); onReviewChange(true)
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }

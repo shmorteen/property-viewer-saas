@@ -1,6 +1,9 @@
 import { supabase } from './supabase'
 import { faces, validateGraph, type LayoutGraph } from './topology'
 import type { Room, SpaceType } from './types'
+import { getLayoutGraph, getProperty, listLevelPolygons, listRooms } from './data'
+import { sameSavedValue } from './plan-acceptance'
+import { requestError } from './errors'
 
 export type EvidenceRating = { confidence: number; source: string[] }
 export type PlanResult = {
@@ -44,6 +47,11 @@ export async function latestPlanExtraction(levelId: string): Promise<PlanExtract
   if (error) throw error
   return data as PlanExtraction | null
 }
+export async function planExtractionWasAccepted(id: string): Promise<boolean> {
+  const { data, error } = await supabase.from('plan_extractions').select('status').eq('id', id).maybeSingle()
+  if (error) throw error
+  return data?.status === 'accepted'
+}
 export async function queuePlanExtraction(levelId: string): Promise<void> {
   const { error } = await supabase.rpc('queue_plan_extraction', { lid: levelId }); if (error) throw error
 }
@@ -59,5 +67,26 @@ export async function acceptPlanExtraction(id: string, graph: LayoutGraph, rooms
     face_regions: regions.map(face => ({ room_id: face.room_id || null, points: face.points.map(p => ({ x: p.x, y: p.y })), vertex_ids: face.ids })),
     width_m: width, calibration, stats,
   })
-  if (error) throw error
+  if (error) throw requestError('Could not accept detected layout', error)
+}
+
+export async function verifyPlanAcceptance(propertyId: string, levelId: string, graph: LayoutGraph, rooms: Room[], width: number): Promise<void> {
+  const [savedGraph, savedRooms, polygons, property] = await Promise.all([
+    getLayoutGraph(levelId, propertyId), listRooms(propertyId), listLevelPolygons([levelId]), getProperty(propertyId),
+  ])
+  const keys = ['property_boundary', 'building_boundary', 'vertices', 'walls', 'rooms', 'openings', 'site_edges', 'stairs'] as const
+  if (keys.some(key => !sameSavedValue(savedGraph[key] || [], graph[key] || []))) throw new Error('The reloaded wall graph differs from the reviewed layout.')
+  if (!property || Math.abs(Number(property.layout_width_m) - width) > .0051) throw new Error('The reloaded calibration does not match the accepted scale.')
+  const assigned = new Set(graph.rooms.map(room => room.room_id))
+  const expectedRooms = rooms.filter(room => assigned.has(room.id))
+  const actualRooms = savedRooms.filter(room => room.level_id === levelId)
+  if (actualRooms.length !== expectedRooms.length) throw new Error('The reloaded room count does not match the accepted assignments.')
+  for (const room of expectedRooms) {
+    const saved = actualRooms.find(item => item.id === room.id)
+    if (!saved || saved.name !== room.name || saved.space_type !== room.space_type || saved.category !== room.category) throw new Error('A reloaded room identity, name, type or category differs from the review.')
+  }
+  for (const face of faces(graph).filter(face => face.room_id)) {
+    const saved = polygons.filter(polygon => polygon.room_id === face.room_id)
+    if (saved.length !== 1 || !sameSavedValue(saved[0].points, face.points.map(p => ({ x: p.x, y: p.y })))) throw new Error('A reloaded room polygon differs from its accepted shared-wall face.')
+  }
 }
