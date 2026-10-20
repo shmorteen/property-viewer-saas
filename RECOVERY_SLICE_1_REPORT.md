@@ -2,9 +2,12 @@
 
 Date: 20 October 2026 (Africa/Lagos).
 
-**Status: focused code/database corrections verified; browser acceptance/reopen
-gate pending. Phase 2 is not declared complete. Later extraction slices have not
-been started. Stop here for review, as requested.**
+**Status: focused code/database corrections and a real authenticated browser
+upload → extraction → correction → rejected RPC → retry → acceptance → full reload
+→ reopen round trip verified on an isolated recovery build and QA draft. The
+historical incident's raw network response is unavailable; its exact SQL cause
+remains unproven. Later extraction slices have not been started. Stop here for
+review, as requested.**
 
 ## A. Repository baseline
 
@@ -123,13 +126,67 @@ Private reproducible evidence: `.local-backups/recovery-20261020/`, including
 `probe-duplicate-room-ids.sql`, `probe-midwrite-rejection.sql`, the original candidate
 response capture, and `roundtrip/expected.json`, SQL, readback and verified rows.
 
-**Browser limitation:** browser control initially timed out; after reconnection the
-user-requested public Netlify app was reached and was signed out. Sign-in has been
-requested. The recovery branch is not deployed to that public site. No successful browser
-upload → accept → hard reload → reopen result is claimed. The CLI test uses an
-authenticated-role simulation, not a browser auth session. Prepared floor-plan
-metadata was used; no private source image was uploaded for these QA database rows.
-Consequently Phase 2's full browser gate remains pending.
+### Authenticated browser continuation
+
+After the user signed in, the existing Netlify session allowed a separate test
+deployment of the already checked frontend build from code commit `8afe0d3`:
+
+- Test URL: `https://zesty-creponne-f0bd37.netlify.app`.
+- Netlify deployment ID: `6ad714597893e206f37c52cc`.
+- The primary `propertyviewersaas.netlify.app` deployment was not replaced.
+- This is a manual test deployment, not a GitHub branch deploy or a release to main.
+
+A new draft, **Recovery browser QA — Plan 1**, was created within the isolated
+**Recovery acceptance QA** organization. Property ID:
+`d062924e-776e-4860-8d0c-56cc6a51dcb9`; level:
+`2d839237-cc28-4108-80f6-4cf62bb76126`; extraction:
+`5e19b2de-df09-44a6-bb61-1bf7a9ee7aa9`.
+
+The original Plan 1 PNG was uploaded through the browser into private Supabase
+Storage. Clicking Analyze queued a job that the connected worker actually completed.
+Its result records the original SHA256 listed above and parser version
+`0.2.0-orthogonal-baseline`; no stored result was seeded for this browser test.
+The result still contains the known 35 walls and nine faces, including false fixture
+faces. This run is not an extraction improvement or five-plan regression claim.
+
+On the recovery build, review changed `BEDROOM#2` to **Browser QA corrected office**
+with type `office`. A selected interior wall was calibrated using a declared **3.5 m
+QA measurement**, yielding a persisted image width of **29.75 m**. This is a test
+measurement, not an assertion about the building. A standard **0.90 m door** was
+deliberately placed and its swing confirmed with the existing tool.
+
+To exercise a genuine server rejection, an ID/organization-guarded CLI update
+temporarily changed only this disposable extraction's status to `rejected` while
+review remained open. Clicking Accept produced this actual browser RPC diagnostic:
+
+```text
+Could not accept detected layout: A successful reviewed candidate is required [P0001]
+```
+
+The corrected name, type and calibration remained in review. The guarded update
+restored `completed`, and retry accepted the retained review. The application
+verified the persisted graph/rooms/polygons/scale and reloaded the editor before
+closing review. A full browser reload, navigation to property details, and reopening
+the editor retained the corrected room and accepted status. Property details showed
+the saved 29.75 m scale.
+
+A separate CLI connection then read only this QA property. An offline verifier
+matched the original wall/vertex geometry, all nine fresh persistent room identities,
+name/type/category metadata, nine derived polygons, door span and calibrated wall
+length. Thus the browser result is supported by a separate persistent read, not
+solely by local React state or an authenticated-role simulation.
+
+Private evidence is under `.local-backups/recovery-20261020/`:
+`browser-qa-state.sql`, `browser-reject-once.sql`, `browser-restore-candidate.sql`,
+`browser-readback.sql`, `browser-readback.response.json`, `verify-browser.mjs`,
+`browser-verified-layouts.json`, and `browser-reopened-room.jpg`.
+
+**Limits:** the browser API exposes console logs but no supported network-response
+capture facility. The current RPC message/code above was observed through the
+application's real PostgREST error path; no raw response body or HTTP status is
+claimed. The original historical failed request is still unavailable. The two
+earlier CLI-only fixtures retain metadata without uploaded images and display
+`Object not found` in their editors; use the new browser QA draft for inspection.
 
 ## E. Persisted database → 3D contract
 
@@ -145,6 +202,13 @@ fixture faces. This verifies persistence/3D continuity, not architectural accura
 Existing virtual-boundary/geometry tests still pass. No balcony/proposal UI fix is
 claimed by the manually placed QA door test.
 
+The browser-accepted QA rows also passed the existing persisted-row GLB check:
+nine rooms, 35 physical walls represented once, one door, **28,292-byte GLB**,
+identity/name/type/category preservation, and measured/expected door void both
+**0.188999 m³**. Artifacts are in the private `browser-models/` directory. This
+geometry check used the independently read browser save; it was not a live 3D-tour
+rendering or public-tour publication test.
+
 ## F. Executed regression checks
 
 - Safe SDK/PostgREST error-rendering regression: failed before fix; passes after fix.
@@ -159,8 +223,15 @@ claimed by the manually placed QA door test.
 - Corrected repeated-image acceptance: 2/2 committed and separately read back.
 - Mid-write rejected acceptance: atomic rollback verified.
 - Persisted-rows GLB generation: 2/2, with identity/wall/door-void checks passed.
-- Browser page reload, production deployment and five-plan parser/semantic
-  cross-regression: not executed successfully in this slice; not counted as passes.
+- Actual browser RPC rejection, retained corrected review and successful retry:
+  passed on the isolated recovery build.
+- Original image upload and worker extraction, browser acceptance, full page reload
+  and editor reopen: passed on the new disposable QA draft.
+- Independent readback and GLB check of that browser save: passed (9 rooms, 35 walls,
+  1 door, matching calibration and derived polygons).
+- Isolated manual Netlify test deployment: succeeded. Primary production deployment,
+  live public-tour/iframe checks and five-plan parser/semantic cross-regression were
+  not executed in this slice and are not counted as passes.
 - Human correction time and held-out extraction accuracy: unmeasured.
 
 ## G. Change inventory and operation
@@ -179,17 +250,22 @@ build of this branch to use the fix; parser/worker behavior is unchanged.
 
 ## H. Remaining risks and review boundary
 
-The historical browser response is unavailable, and browser reopening is unverified
-(public app sign-in and a branch build are still required).
-The public site has not been changed by this branch. Parser furniture false positives,
+The historical browser response remains unavailable. Browser reopening is verified
+on the isolated test build; the primary public site has not been changed by this
+branch. The workspace selector reset to the first organization after full reload;
+the QA property still loaded under normal RLS, and QA was reselected for inspection.
+That existing workspace-selection behavior is outside this acceptance slice.
+Parser furniture false positives,
 Plan 2's office, white-wall recovery, balcony acceptance and opening-proposal actions
 remain unresolved. Do not treat increased room counts or successful meshes as proof
 that those architectural defects have been corrected.
 
 ## I. Next narrow task
 
-First complete the pending Phase 2 browser round trip on a build of this recovery
-branch and a disposable QA property, capturing a real rejected PostgREST response
-and a successful page reload. After review/approval of this slice, the next parser
-slice is Plan 1 fixture-derived walls/faces, with no simultaneous office/white-wall/
-balcony rewrite. No unrelated slice was started here.
+Review this acceptance slice and its isolated QA draft. The authenticated browser
+round trip and rejected-RPC recovery gate are now executed; the historical raw
+network capture remains unavailable and is not inferred from the reproduced faults.
+After review/approval, the next parser slice is Plan 1 fixture-derived walls/faces,
+with no simultaneous office/white-wall/balcony rewrite. No unrelated slice was
+started here. The code/report remain on the separate recovery branch; no merge or
+primary production release is implied by the isolated test deployment.
