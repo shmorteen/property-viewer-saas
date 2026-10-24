@@ -1,4 +1,4 @@
-"""Verified-pair benchmark. Empty datasets and failed plans remain visible in JSON."""
+"""Verified-pair benchmark and explicitly non-scored real-plan observations."""
 import argparse
 import hashlib
 import io
@@ -33,6 +33,27 @@ def lines(graph: dict, aspect: float) -> list:
 
 def room_faces(graph: dict, aspect: float) -> list:
     return list(polygonize(lines(graph,aspect)))
+
+
+def observation_metrics(graph: dict, observation: dict, aspect: float) -> dict:
+    """Check observed face relationships without inventing a full reference graph."""
+    faces = room_faces(graph,aspect)
+    def at(name):
+        x,y=observation[name]
+        return next((face for face in faces if face.contains(Point(x,y*aspect))),None)
+    office,above,west=(at(name) for name in ('office_point','above_point','west_point'))
+    def shared(other):
+        return round(office.boundary.intersection(other.boundary).length,6) if office and other and office!=other else 0.
+    bounds=[round(v,6) for v in office.bounds] if office else None
+    office_above=shared(above)
+    office_west=shared(west)
+    return {'detected_room_count':len(faces),'physical_wall_count':sum(w['kind']!='virtual' for w in graph['walls']),
+            'invalid_topology_count':len(validate(graph)),'office_face_present':office is not None,
+            'office_face_bounds_image_width_units':bounds,
+            'office_above_shared_boundary_image_width':office_above,
+            'office_west_shared_boundary_image_width':office_west,
+            'observation_passed':bool(office and above and west and office_above>.05 and office_west>.05),
+            'reference_accuracy':'unmeasured; point and adjacency observations are not a verified reference graph'}
 
 
 def metrics(predicted: dict, truth: dict, aspect: float, tolerance: float=.01) -> dict:
@@ -143,6 +164,8 @@ def run(manifest_path: Path, split: str, root: Path, debug_dir: Path | None=None
     hashes={}
     for item in config['fixtures']:
         digest=hashlib.sha256((manifest_path.parent/item['image']).read_bytes()).hexdigest()
+        if item.get('kind')=='observed_real' and digest!=item['image_sha256']:
+            raise ValueError(f"Stale observation image: {item['id']}")
         if digest in hashes and hashes[digest]!=item['split']: raise ValueError('The same image is in development and held-out splits')
         hashes[digest]=item['split']
     report={'split':split,'cases':[],'production_ready':False,'status':'no_verified_fixtures',
@@ -151,16 +174,18 @@ def run(manifest_path: Path, split: str, root: Path, debug_dir: Path | None=None
     for item in config['fixtures']:
         if item['split']!=split: continue
         raw=(manifest_path.parent/item['image']).read_bytes()
-        truth=json.loads((manifest_path.parent/item['truth']).read_text(encoding='utf-8'))
-        if not truth.get('verified_by') or not truth.get('verified_at') or truth.get('image_sha256')!=hashlib.sha256(raw).hexdigest(): raise ValueError(f"Unverified or stale ground truth: {item['id']}")
-        if validate(truth['graph']) or ts_validate([truth['graph']],root)[0]: raise ValueError(f"Invalid ground truth: {item['id']}")
+        observed=item.get('kind')=='observed_real'
+        truth=None if observed else json.loads((manifest_path.parent/item['truth']).read_text(encoding='utf-8'))
+        if not observed:
+            if not truth.get('verified_by') or not truth.get('verified_at') or truth.get('image_sha256')!=hashlib.sha256(raw).hexdigest(): raise ValueError(f"Unverified or stale ground truth: {item['id']}")
+            if validate(truth['graph']) or ts_validate([truth['graph']],root)[0]: raise ValueError(f"Invalid ground truth: {item['id']}")
         for semantic in (False,True):
             case_debug=debug_dir/item['id']/('semantic' if semantic else 'cv') if debug_dir else None
             result,_=analyze_plan(raw,use_semantic=semantic,debug_dir=case_debug)
             case={'id':item['id'],'mode':'semantic+geometry' if semantic else 'CV-only','status':result['status'],
                   'structure_confidence':result.get('structure_confidence'),'semantic_confidence':result.get('semantic_confidence'),
                   'opening_confidence':result.get('opening_confidence'),'scale_confidence':result.get('scale_confidence'),
-                  'reference_kind':truth.get('reference_kind','human_verified'),
+                  'reference_kind':'observed_real_unverified' if observed else truth.get('reference_kind','human_verified'),
                   'errors':result['validation_errors'],'quality':result['quality'],'model':result['model'],
                   'manual_correction_seconds':item.get('correction_seconds')}
             if semantic and not result['model']['available']: case['semantic_evidence']='unavailable; structure evaluated independently'
@@ -168,19 +193,25 @@ def run(manifest_path: Path, split: str, root: Path, debug_dir: Path | None=None
                 problem=ts_validate([result['graph']],root)[0]
                 case['typescript_validation']=problem
                 if not problem:
-                    case['metrics']=metrics(result['graph'],truth|{'predicted_rooms':result['room_candidates']},result['quality']['height']/result['quality']['width'])
+                    aspect=result['quality']['height']/result['quality']['width']
+                    case['metrics']=(observation_metrics(result['graph'],item['observation'],aspect) if observed
+                        else metrics(result['graph'],truth|{'predicted_rooms':result['room_candidates']},aspect))
                     case['metrics']['unresolved_elements']=len(result['unresolved'])+sum(r['confidence']<.5 for r in result['room_candidates'])
-                    try: case['downstream_3d']=downstream(result,truth.get('width_m') or 12.)
+                    case['metrics']['discarded_structural_length_fraction']=result['reconciliation']['discarded_structural_length_fraction']
+                    try: case['downstream_3d']=downstream(result,(truth or {}).get('width_m') or 12.)
                     except (ValueError,RuntimeError,KeyError) as exc:
                         case['downstream_3d']={'succeeded':False,'error':str(exc)}
                         case['status']='downstream_failed'
+                    if observed and not case['metrics']['observation_passed']:
+                        case['status']='observation_failed'
                 else: case['status']='invalid_topology'
             report['cases'].append(case)
     if report['cases']:
-        report['status']='evaluated_requires_human_assessment'
+        report['status']='observed_structure_failed' if any(case['status']=='observation_failed' for case in report['cases']) else 'evaluated_requires_human_assessment'
         report['semantic_comparison']='Optional semantic/opening evidence after identical raster structural reconstruction'
     report['reference_counts']={'authored_analytic':sum(item.get('kind')=='authored_analytic' and item['split']==split for item in config['fixtures']),
-                                'human_verified':sum(item.get('kind')!='authored_analytic' and item['split']==split for item in config['fixtures'])}
+                                'human_verified':sum(item.get('kind') not in ('authored_analytic','observed_real') and item['split']==split for item in config['fixtures']),
+                                'observed_real_unverified':sum(item.get('kind')=='observed_real' and item['split']==split for item in config['fixtures'])}
     return report
 
 

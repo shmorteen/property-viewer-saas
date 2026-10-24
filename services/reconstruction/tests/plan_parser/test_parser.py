@@ -15,7 +15,8 @@ from plan_parser.vectorize import vectorize
 from plan_parser.preprocess import prepare
 from plan_parser.topology import validate
 from plan_parser.ocr import normalize_label, dimensions
-from plan_parser.evaluate import downstream, metrics
+from plan_parser.evaluate import downstream, metrics, observation_metrics
+from plan_parser.lines import extract
 
 
 def drawing(concave=False):
@@ -141,6 +142,33 @@ def test_reconciliation_preserves_unresolved_structural_evidence_for_review():
     _,_,info=reconcile(square,(1000,800))
     assert info['discarded_structural_length_fraction']>.2
     assert info['unresolved_structural_fragments']
+
+
+def test_short_thick_wall_continues_supported_exterior_axis():
+    mask=np.zeros((300,300),np.uint8)
+    cv2.line(mask,(250,25),(250,170),255,15)
+    cv2.line(mask,(250,225),(250,275),255,15)
+    cv2.line(mask,(90,275),(250,275),255,9)
+    segments,_=extract(mask,{}, {'dark':mask})
+    assert any(abs(a[0]-250)<2 and abs(b[0]-250)<2
+               and min(a[1],b[1])<30 and max(a[1],b[1])>270
+               for a,b in segments)
+
+
+def test_private_plan2_office_face_and_shared_boundaries():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[4]
+    source=root/'.local-backups/recovery-20261020/evidence/pvs test/plan 2.png'
+    if not source.exists(): pytest.skip('Private Plan 2 original is unavailable')
+    raw=source.read_bytes()
+    assert hashlib.sha256(raw).hexdigest()=='cbcf98d38a3d26559d5e798948d067e7149193d0d198feee5f6830388c17fbe1'
+    result,_=analyze_plan(raw,use_semantic=False,use_ocr=False)
+    assert result['status']=='NEEDS_REVIEW',result['validation_errors']
+    observed=observation_metrics(result['graph'],{'office_point':[.72,.89],
+        'above_point':[.72,.72],'west_point':[.5,.89]},600/333)
+    assert observed['observation_passed'] and observed['detected_room_count']==9
+    assert observed['physical_wall_count']==47 and observed['invalid_topology_count']==0
+    assert downstream(result)['succeeded']
 
 
 @pytest.mark.parametrize('name',['clean-dark','gray-furnished'])

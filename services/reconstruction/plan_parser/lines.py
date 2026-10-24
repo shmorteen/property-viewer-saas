@@ -14,12 +14,14 @@ def _runs(mask, horizontal, minimum):
         crop=(labels[y:y+h,x:x+w]==label)
         widths=crop.sum(axis=0 if horizontal else 1)
         stroke=float(np.median(widths[widths>0]))
-        if (h if horizontal else w)>length*.22: continue
+        compact=(h if horizontal else w)>length*.22
+        if (h if horizontal else w)>length*.35: continue
         weights=crop.sum(axis=1 if horizontal else 0)
         # Median band position is stable at intersections and short spurs.
         center=float(np.average(np.arange(len(weights)),weights=weights))+(y if horizontal else x)
         found.append({'axis':0 if horizontal else 1,'at':center,'lo':float(x if horizontal else y),
-                      'hi':float(x+w-1 if horizontal else y+h-1),'stroke':stroke,'support':length})
+                      'hi':float(x+w-1 if horizontal else y+h-1),'stroke':stroke,'support':length,
+                      'compact':compact})
     return found,opened
 
 
@@ -49,12 +51,21 @@ def extract(binary: np.ndarray, semantic: dict, thresholds: dict | None=None) ->
         for horizontal in (True,False):
             runs,_=_runs(mask,horizontal,minimum)
             raw.extend(runs)
-    long=[r['stroke'] for r in raw if r['hi']-r['lo']>=unit*.13]
+    long=[r['stroke'] for r in raw if not r['compact'] and r['hi']-r['lo']>=unit*.13]
     stroke=float(np.percentile(long,80)) if long else max(2.,unit*.006)
     stroke=float(np.clip(stroke,unit*.002,unit*.025))
     # Architectural walls may vary in thickness. Primary strokes establish the
     # scale; thinner structural runs remain if >= 55% of that scale.
-    filtered=[r for r in raw if r['stroke']>=max(unit*.0015,stroke*.55)]
+    primary=[r for r in raw if not r['compact'] and r['stroke']>=max(unit*.0015,stroke*.55)]
+    # A short thick wall joined to a corner can be wider than 22% of its
+    # length. Keep it only as a continuation of an independently supported
+    # structural axis; isolated furniture rectangles remain excluded.
+    continuation_gap=min(unit*.17,stroke*18)
+    filtered=primary+[r for r in raw if r['compact'] and r['stroke']>=max(unit*.0015,stroke*.55)
+        and any(q['axis']==r['axis'] and q['support']>=unit*.25
+                and abs(q['at']-r['at'])<=stroke*.65
+                and max(r['lo']-q['hi'],q['lo']-r['hi'],0.)<=continuation_gap
+                for q in primary)]
     structural=np.zeros_like(binary)
     for run in filtered:
         a=(round(run['lo']),round(run['at'])) if run['axis']==0 else (round(run['at']),round(run['lo']))

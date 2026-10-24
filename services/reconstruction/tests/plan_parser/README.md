@@ -50,6 +50,23 @@ conversion. Do not treat a dataset bounding box as a shared wall graph. CubiCasa
 is noncommercial; it is not bundled or represented as a commercial benchmark.
 An empty held-out split produces `no_verified_fixtures`, never a success score.
 
+## Real-plan structural observations without a verified graph
+
+`recovery-manifest.json` contains the Plan 2 lower-right-office observation.
+Its image path points into the private `.local-backups/` evidence directory, so
+the case runs only in a workspace with that original source. The evaluator
+checks its SHA256 and three observed face points, then reports closed-face
+count, physical wall count, shared-boundary lengths, topology validity and GLB
+generation. It does **not** compute wall accuracy or room IoU from invented
+ground truth. `reference_counts.observed_real_unverified` keeps this case
+separate from verified pairs. See `RECOVERY_SLICE_2_PLAN2_REPORT.md` for the
+before/after measurements and remaining uncertainty.
+
+```powershell
+$env:PYTHONPATH='services/reconstruction'
+services/reconstruction/.venv/Scripts/python.exe -m plan_parser.evaluate services/reconstruction/tests/plan_parser/recovery-manifest.json --split development --output services/reconstruction/tests/plan_parser/recovery-results.json
+```
+
 
 ## Clean orthogonal regression baseline (v0.2)
 

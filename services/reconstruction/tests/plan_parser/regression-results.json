@@ -102,7 +102,8 @@
         "invalid_topology_count": 0,
         "estimated_edit_operations": 4,
         "edit_cost_definition": "Unmatched walls/openings: add/delete; displaced endpoints: move; unmatched rooms: assign; wrong labels: edit. Estimate, not observed UI operations.",
-        "unresolved_elements": 7
+        "unresolved_elements": 7,
+        "discarded_structural_length_fraction": 0.0
       },
       "downstream_3d": {
         "succeeded": true,
@@ -217,7 +218,8 @@
         "invalid_topology_count": 0,
         "estimated_edit_operations": 4,
         "edit_cost_definition": "Unmatched walls/openings: add/delete; displaced endpoints: move; unmatched rooms: assign; wrong labels: edit. Estimate, not observed UI operations.",
-        "unresolved_elements": 7
+        "unresolved_elements": 7,
+        "discarded_structural_length_fraction": 0.0
       },
       "downstream_3d": {
         "succeeded": true,
@@ -328,7 +330,8 @@
         "invalid_topology_count": 0,
         "estimated_edit_operations": 4,
         "edit_cost_definition": "Unmatched walls/openings: add/delete; displaced endpoints: move; unmatched rooms: assign; wrong labels: edit. Estimate, not observed UI operations.",
-        "unresolved_elements": 4
+        "unresolved_elements": 4,
+        "discarded_structural_length_fraction": 0.0
       },
       "downstream_3d": {
         "succeeded": true,
@@ -443,7 +446,8 @@
         "invalid_topology_count": 0,
         "estimated_edit_operations": 4,
         "edit_cost_definition": "Unmatched walls/openings: add/delete; displaced endpoints: move; unmatched rooms: assign; wrong labels: edit. Estimate, not observed UI operations.",
-        "unresolved_elements": 26
+        "unresolved_elements": 26,
+        "discarded_structural_length_fraction": 0.0
       },
       "downstream_3d": {
         "succeeded": true,
@@ -460,6 +464,7 @@
   "correction_time": "Only operator-recorded correction_seconds is reported; no fabricated time estimates.",
   "reference_counts": {
     "authored_analytic": 2,
-    "human_verified": 0
+    "human_verified": 0,
+    "observed_real_unverified": 0
   }
 }

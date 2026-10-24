@@ -1,0 +1,210 @@
+{
+  "split": "development",
+  "cases": [
+    {
+      "id": "plan-2-lower-right-office",
+      "mode": "CV-only",
+      "status": "NEEDS_REVIEW",
+      "structure_confidence": {
+        "score": 0.832,
+        "valid": true,
+        "method": "topology validity + retained structural evidence; heuristic"
+      },
+      "semantic_confidence": {
+        "score": 0.567,
+        "labels_detected": 32
+      },
+      "opening_confidence": {
+        "score": 0.0,
+        "review_candidates": 19
+      },
+      "scale_confidence": {
+        "score": 0.0,
+        "reason": "Wall measurement required"
+      },
+      "reference_kind": "observed_real_unverified",
+      "errors": [],
+      "quality": {
+        "accepted": true,
+        "width": 333,
+        "height": 600,
+        "processing_width": 900,
+        "processing_height": 1622,
+        "native_resolution": false,
+        "original_preserved": true,
+        "blur_laplacian": 3381.653,
+        "contrast": 143.0,
+        "ink_fraction": 0.1631,
+        "skew_degrees": 0.0,
+        "orientation_spread": 1.008,
+        "perspective": "not established",
+        "compression": "not reliably measurable from decoded pixels",
+        "corrections": [
+          "working image resized to 900 x 1622; exact inverse scale retained"
+        ],
+        "errors": [],
+        "warnings": [
+          "Small source: structural working image normalized; OCR/opening confidence is reduced.",
+          "Perspective and compression estimates are heuristic; inspect the structural overlay."
+        ],
+        "working_to_original": [
+          [
+            0.37,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.36991368680641185,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "model": {
+        "available": false,
+        "name": "CV-only"
+      },
+      "manual_correction_seconds": null,
+      "typescript_validation": null,
+      "metrics": {
+        "detected_room_count": 9,
+        "physical_wall_count": 47,
+        "invalid_topology_count": 0,
+        "office_face_present": true,
+        "office_face_bounds_image_width_units": [
+          0.528983,
+          1.469088,
+          0.915918,
+          1.721084
+        ],
+        "office_above_shared_boundary_image_width": 0.386934,
+        "office_west_shared_boundary_image_width": 0.251996,
+        "observation_passed": true,
+        "reference_accuracy": "unmeasured; point and adjacency observations are not a verified reference graph",
+        "unresolved_elements": 25,
+        "discarded_structural_length_fraction": 0.2209
+      },
+      "downstream_3d": {
+        "succeeded": true,
+        "bytes": 35312,
+        "physical_wall_count": 47,
+        "room_faces": 9,
+        "test_width_m": 12.0
+      }
+    },
+    {
+      "id": "plan-2-lower-right-office",
+      "mode": "semantic+geometry",
+      "status": "NEEDS_REVIEW",
+      "structure_confidence": {
+        "score": 0.832,
+        "valid": true,
+        "method": "topology validity + retained structural evidence; heuristic"
+      },
+      "semantic_confidence": {
+        "score": 0.567,
+        "labels_detected": 32
+      },
+      "opening_confidence": {
+        "score": 0.0,
+        "review_candidates": 38
+      },
+      "scale_confidence": {
+        "score": 0.0,
+        "reason": "Wall measurement required"
+      },
+      "reference_kind": "observed_real_unverified",
+      "errors": [],
+      "quality": {
+        "accepted": true,
+        "width": 333,
+        "height": 600,
+        "processing_width": 900,
+        "processing_height": 1622,
+        "native_resolution": false,
+        "original_preserved": true,
+        "blur_laplacian": 3381.653,
+        "contrast": 143.0,
+        "ink_fraction": 0.1631,
+        "skew_degrees": 0.0,
+        "orientation_spread": 1.008,
+        "perspective": "not established",
+        "compression": "not reliably measurable from decoded pixels",
+        "corrections": [
+          "working image resized to 900 x 1622; exact inverse scale retained"
+        ],
+        "errors": [],
+        "warnings": [
+          "Small source: structural working image normalized; OCR/opening confidence is reduced.",
+          "Perspective and compression estimates are heuristic; inspect the structural overlay."
+        ],
+        "working_to_original": [
+          [
+            0.37,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.36991368680641185,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "model": {
+        "name": "Yytsi floorplan-to-3d-walls / ResNet34-UNet",
+        "version": "68843a3ab7b12aa03b23c36f955a0d8099b4e2ee",
+        "source": "https://huggingface.co/Yytsi/floorplan-to-3d-walls/tree/68843a3ab7b12aa03b23c36f955a0d8099b4e2ee",
+        "license": "MIT (published model card); trained on CubiCasa5K",
+        "sha256": "a5994cc885834ff96f108d0811af6e46dafb0f8a3cfb300574648771d3bb0828",
+        "available": true
+      },
+      "manual_correction_seconds": null,
+      "typescript_validation": null,
+      "metrics": {
+        "detected_room_count": 9,
+        "physical_wall_count": 47,
+        "invalid_topology_count": 0,
+        "office_face_present": true,
+        "office_face_bounds_image_width_units": [
+          0.528983,
+          1.469088,
+          0.915918,
+          1.721084
+        ],
+        "office_above_shared_boundary_image_width": 0.386934,
+        "office_west_shared_boundary_image_width": 0.251996,
+        "observation_passed": true,
+        "reference_accuracy": "unmeasured; point and adjacency observations are not a verified reference graph",
+        "unresolved_elements": 44,
+        "discarded_structural_length_fraction": 0.2209
+      },
+      "downstream_3d": {
+        "succeeded": true,
+        "bytes": 35312,
+        "physical_wall_count": 47,
+        "room_faces": 9,
+        "test_width_m": 12.0
+      }
+    }
+  ],
+  "production_ready": false,
+  "status": "evaluated_requires_human_assessment",
+  "semantic_comparison": "Optional semantic/opening evidence after identical raster structural reconstruction",
+  "correction_time": "Only operator-recorded correction_seconds is reported; no fabricated time estimates.",
+  "reference_counts": {
+    "authored_analytic": 0,
+    "human_verified": 0,
+    "observed_real_unverified": 1
+  }
+}

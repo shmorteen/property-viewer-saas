@@ -1,0 +1,17 @@
+{
+  "description": "Development-only observations from a private real plan; no verified reference graph or accuracy scores",
+  "fixtures": [
+    {
+      "id": "plan-2-lower-right-office",
+      "split": "development",
+      "kind": "observed_real",
+      "image": "../../../../.local-backups/recovery-20261020/evidence/pvs test/plan 2.png",
+      "image_sha256": "cbcf98d38a3d26559d5e798948d067e7149193d0d198feee5f6830388c17fbe1",
+      "observation": {
+        "office_point": [0.72, 0.89],
+        "above_point": [0.72, 0.72],
+        "west_point": [0.5, 0.89]
+      }
+    }
+  ]
+}
