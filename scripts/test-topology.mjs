@@ -19,6 +19,11 @@ assert.throws(() => topology.candidateFromLegacy(emptyGraph(), [
 // On a 1200 × 900 canvas with layout_width_m=15.24, this .8 × .8 footprint is 40 × 30 ft.
 const graph0 = createBuilding(emptyGraph(), [{ x: .1, y: .1 }, { x: .9, y: .1 }, { x: .9, y: .9 }, { x: .1, y: .9 }])
 assert.equal(faces(graph0).length, 1)
+const dangling = structuredClone(graph0)
+const loose = { id: crypto.randomUUID(), x: .5, y: .5 }
+dangling.vertices.push(loose)
+dangling.walls.push({ id: crypto.randomUUID(), a: dangling.vertices[0].id, b: loose.id, kind: 'interior', thickness: .1, height: 2.7 })
+assert.match(validateGraph(dangling), /Disconnected endpoint near 50% across, 50% down/)
 assert.deepEqual(topology.orthogonalPoint({x:.2,y:.2},{x:.8,y:.5},1000,750), {x:.8,y:.2})
 assert.deepEqual(topology.orthogonalPoint({x:.2,y:.2},{x:.3,y:.8},1000,750), {x:.2,y:.8})
 const freeSnap = snapToGraph(graph0, {x:.103,y:.103},1000,750,true,{vertex:false,wall:false,grid:false})

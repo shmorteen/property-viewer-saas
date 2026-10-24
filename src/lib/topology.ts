@@ -268,6 +268,13 @@ export function validateGraph(graph: LayoutGraph): string | null {
       }
     }
   }
+  const degree = new Map<string, number>()
+  for (const wall of graph.walls) {
+    degree.set(wall.a, (degree.get(wall.a) || 0) + 1)
+    degree.set(wall.b, (degree.get(wall.b) || 0) + 1)
+  }
+  const disconnected = graph.vertices.find(vertex => (degree.get(vertex.id) || 0) < 2)
+  if (disconnected) return `Disconnected endpoint near ${Math.round(disconnected.x * 100)}% across, ${Math.round(disconnected.y * 100)}% down. Connect the partition to another wall or undo that edit.`
   const regions = faces(graph)
   if (!regions.length || regions.some(f => f.area < .0005 || !validLayoutPolygon(f.points))) return 'Partition creates an invalid or tiny space.'
   if (graph.rooms.some(r => regions.filter(f => f.room_id === r.room_id).length !== 1)) return 'A room lost its enclosed area. Move its partition or remove the room assignment first.'
