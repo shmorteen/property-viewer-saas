@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import crypto from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import { build } from 'esbuild'
 
 globalThis.crypto ||= crypto.webcrypto
@@ -19,6 +20,27 @@ assert.throws(() => topology.candidateFromLegacy(emptyGraph(), [
 // On a 1200 × 900 canvas with layout_width_m=15.24, this .8 × .8 footprint is 40 × 30 ft.
 const graph0 = createBuilding(emptyGraph(), [{ x: .1, y: .1 }, { x: .9, y: .1 }, { x: .9, y: .9 }, { x: .1, y: .9 }])
 assert.equal(faces(graph0).length, 1)
+const fixtureCorner = addPartition(graph0, [snapToGraph(graph0,{x:.7,y:.1},1000,1000,false),
+  {point:{x:.7,y:.3},kind:'free'},snapToGraph(graph0,{x:.9,y:.3},1000,1000,false)])
+fixtureCorner.rooms = [{room_id:'bathroom',point:{x:.5,y:.5}},{room_id:'fixture',point:{x:.8,y:.2}}]
+assert.deepEqual(topology.mergeRoomTargets(fixtureCorner,'fixture'),['bathroom'])
+const mergedFixture = topology.mergeRoomInto(fixtureCorner,'fixture','bathroom')
+assert.equal(faces(mergedFixture).length,1,'False corner face merges in one connected edit')
+assert.equal(validateGraph(mergedFixture),null)
+assert.equal(mergedFixture.rooms.length,1)
+assert.equal(fixtureCorner.walls.length-mergedFixture.walls.length,2,'Both false fixture partitions are removed together')
+const privatePlan2 = '.local-backups/plan2-acceptance-current-result.json'
+if (existsSync(privatePlan2)) {
+  const candidate = JSON.parse(readFileSync(privatePlan2,'utf8')).graph
+  const regions = faces(candidate)
+  const falseFace = regions.find(face => topology.contains({x:.84,y:.09},face.points,false))
+  const bathroom = regions.find(face => topology.contains({x:.74,y:.16},face.points,false))
+  assert.ok(falseFace?.room_id && bathroom?.room_id)
+  const repaired = topology.mergeRoomInto(candidate,falseFace.room_id,bathroom.room_id)
+  assert.equal(faces(repaired).length,8,'Plan 2 fixture face is removed')
+  assert.equal(validateGraph(repaired),null,'Plan 2 keeps valid shared-wall topology')
+  assert.ok(faces(repaired).some(face => topology.contains({x:.72,y:.89},face.points,false)),'Lower-right office remains enclosed')
+}
 const dangling = structuredClone(graph0)
 const loose = { id: crypto.randomUUID(), x: .5, y: .5 }
 dangling.vertices.push(loose)

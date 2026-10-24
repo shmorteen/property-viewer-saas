@@ -3,7 +3,7 @@ import { Circle, Image as KonvaImage, Layer, Line, Stage, Text } from 'react-kon
 import type Konva from 'konva'
 import { addRoom, deleteRoom, getLayoutGraph, listLevelPolygons, listMedia, listRooms, restoreRoom, saveLayoutGraph, savePolygon } from '../lib/data'
 import { overlapsAnother, validLayoutPolygon } from '../lib/geometry'
-import { OPENING_WIDTHS_M, OPENING_WIDTH_BOUNDS_M, addPartition, contains, createBuilding, emptyGraph, entranceSpans, faceCenter, faces, filletCorner, footprint, openingAt, orthogonalPoint, preserveOpeningWidths, snapToGraph, validateBoundary, validateGraph, wallLengthM, wallParameter, wallPoint, type EdgeBehavior, type LayoutGraph, type OpeningPreset, type Snap, type SnapOptions, type StairDirection, type StairFeature, type StairKind, type TopologyOpening, type Wall } from '../lib/topology'
+import { OPENING_WIDTHS_M, OPENING_WIDTH_BOUNDS_M, addPartition, contains, createBuilding, emptyGraph, entranceSpans, faceCenter, faces, filletCorner, footprint, mergeRoomInto, mergeRoomTargets, openingAt, orthogonalPoint, preserveOpeningWidths, snapToGraph, validateBoundary, validateGraph, wallLengthM, wallParameter, wallPoint, type EdgeBehavior, type LayoutGraph, type OpeningPreset, type Snap, type SnapOptions, type StairDirection, type StairFeature, type StairKind, type TopologyOpening, type Wall } from '../lib/topology'
 import type { FloorPlan, Level, Point, Room, RoomPolygon, SpaceType } from '../lib/types'
 import { Button } from './ui'
 import { validatePlanCandidate, type PlanCalibration, type PlanReview } from '../lib/plan-analysis'
@@ -476,10 +476,22 @@ export function TopologyComposer({ propertyId, layoutWidthM: savedWidth, level, 
   const selectedOpeningIsPath = Boolean(selectedOpeningData?.path_id && graph.openings.filter(item => item.path_id === selectedOpeningData.path_id).length > 1)
   const selectedStairData = (graph.stairs || []).find(item => item.id === selectedStair)
   const reviewRoom = reviewRooms.find(room => room.id === reviewRoomId)
+  const mergeTargets = reviewRoom ? mergeRoomTargets(graph, reviewRoom.id) : []
   const evidenceColor = (id: string, category: 'walls' | 'openings' | 'junctions' | 'rooms') => { const score = review?.result.confidence?.[category]?.[id]?.confidence ?? .35; return score >= .8 ? '#20755d' : score >= .5 ? '#a76b10' : '#b54545' }
   const updateReviewRoom = (patch: Partial<Pick<Room, 'name' | 'space_type'>>) => {
     if (!reviewRoom) return
     setPast(value => [...value.slice(-29), { graph, reviewRooms }]); setFuture([]); setReviewRooms(value => value.map(room => room.id === reviewRoom.id ? { ...room, ...patch } : room)); setReviewOperations(value => value+1)
+  }
+  const mergeReviewRoom = async (targetId: string) => {
+    if (!reviewRoom) return
+    try {
+      const next = mergeRoomInto(graph, reviewRoom.id, targetId)
+      if (await commit(next, `${reviewRoom.name} merged into ${reviewRooms.find(room => room.id === targetId)?.name || 'adjacent room'}.`)) {
+        setReviewRooms(value => value.filter(room => room.id !== reviewRoom.id))
+        setReviewRoomId(targetId)
+        setSelectedWall(null)
+      }
+    } catch (e) { setError(errorMessage(e)) }
   }
   const acceptReview = async () => {
     if (!review || !calibration || !calibratedWall) return
@@ -503,7 +515,7 @@ export function TopologyComposer({ propertyId, layoutWidthM: savedWidth, level, 
       <div className="flex flex-wrap gap-2"><Button size="sm" disabled={busy || !calibration || !calibratedWall || layoutWidthM<2 || layoutWidthM>100} onClick={() => void acceptReview()}>Accept detected layout</Button><Button size="sm" variant="outline" disabled={busy} onClick={review.onClose}>Close review without saving</Button></div>
       {review.result.unresolved.length>0 && <p>{review.result.unresolved.length} ambiguous opening candidates were left out. Use Door, Window, or Entrance to place them on the correct wall after inspection.</p>}
       <label className="flex flex-wrap items-center gap-2">Review room <select aria-label="Candidate room" value={reviewRoomId || ''} onChange={e => setReviewRoomId(e.target.value)} className="rounded-lg border p-2"><option value="">Choose an enclosed space</option>{reviewRooms.map(room => <option key={room.id} value={room.id}>{room.name}{room.space_type === 'other' ? ' · unresolved' : ''}</option>)}</select></label>
-      {reviewRoom && <div className="flex flex-wrap gap-2"><input aria-label="Candidate room name" key={`${reviewRoom.id}-name-${reviewRoom.name}`} defaultValue={reviewRoom.name} maxLength={80} onBlur={e => { if (e.target.value.trim() && e.target.value.trim() !== reviewRoom.name) updateReviewRoom({ name: e.target.value.trim() }) }} className="rounded-lg border p-2"/><select aria-label="Candidate room type" value={reviewRoom.space_type} onChange={e => updateReviewRoom({ space_type: e.target.value as SpaceType })} className="rounded-lg border p-2"><option value="other">Unresolved / other</option>{roomOptions.map(option => <option key={option.type} value={option.type}>{option.name}</option>)}</select><Button size="sm" variant="outline" onClick={() => { void commit({ ...graph, rooms: graph.rooms.filter(seed => seed.room_id !== reviewRoom.id) }, 'Room assignment removed.').then(saved => { if (saved) { setReviewRooms(value => value.filter(room => room.id !== reviewRoom.id)); setReviewRoomId(null) } }) }}>Leave face unassigned</Button></div>}
+      {reviewRoom && <div className="flex flex-wrap gap-2"><input aria-label="Candidate room name" key={`${reviewRoom.id}-name-${reviewRoom.name}`} defaultValue={reviewRoom.name} maxLength={80} onBlur={e => { if (e.target.value.trim() && e.target.value.trim() !== reviewRoom.name) updateReviewRoom({ name: e.target.value.trim() }) }} className="rounded-lg border p-2"/><select aria-label="Candidate room type" value={reviewRoom.space_type} onChange={e => updateReviewRoom({ space_type: e.target.value as SpaceType })} className="rounded-lg border p-2"><option value="other">Unresolved / other</option>{roomOptions.map(option => <option key={option.type} value={option.type}>{option.name}</option>)}</select><Button size="sm" variant="outline" onClick={() => { void commit({ ...graph, rooms: graph.rooms.filter(seed => seed.room_id !== reviewRoom.id) }, 'Room assignment removed.').then(saved => { if (saved) { setReviewRooms(value => value.filter(room => room.id !== reviewRoom.id)); setReviewRoomId(null) } }) }}>Leave face unassigned</Button>{mergeTargets.map(targetId => <Button key={targetId} size="sm" variant="outline" onClick={() => void mergeReviewRoom(targetId)}>Merge into {reviewRooms.find(room => room.id === targetId)?.name || 'adjacent room'}</Button>)}</div>}
     </div>}
     <div className="space-y-2" role="toolbar" aria-label="Layout drawing modes">
       {([['Select', [['select','Select']]], ['Draw', [['property','Property boundary'],['building','Building boundary'],['partition','Partition'],['room','Add room'],['outdoor','Outdoor space'],['stairs','Stairs']]], ['Openings', [['door','Door'],['double_door','Double door'],['window','Window'],['wide_window','Wide window'],['entrance','Entrance']]]] as [string, [Mode,string][]][]).map(([group, tools]) => <div key={group} className="flex flex-wrap items-center gap-2"><span className="w-16 text-[10px] font-bold uppercase tracking-widest text-slate-500">{group}</span>{tools.map(([value,label]) => <button key={value} type="button" aria-pressed={mode === value} disabled={busy || Boolean(review && (value === 'property' || value === 'outdoor')) || (value === 'building' && graph.walls.length > 0)} onClick={() => changeMode(value)} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${mode === value ? 'border-pine bg-pine text-white' : 'border-line bg-white hover:bg-mint'}`}>{label}</button>)}</div>)}

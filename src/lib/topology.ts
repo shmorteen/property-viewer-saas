@@ -237,6 +237,33 @@ export function faces(graph: LayoutGraph): Face[] {
   }
   return result
 }
+const faceEdges = (face: Face) => new Set(face.ids.map((id, index) => [id, face.ids[(index + 1) % face.ids.length]].sort().join(':')))
+export function mergeRoomTargets(graph: LayoutGraph, roomId: string): string[] {
+  const regions = faces(graph), source = regions.find(face => face.room_id === roomId)
+  if (!source) return []
+  const edges = faceEdges(source)
+  return regions.filter(face => face.room_id && face.room_id !== roomId && [...faceEdges(face)].some(edge => edges.has(edge))).map(face => face.room_id!)
+}
+/** Remove every shared partition in one edit so a false fixture face cannot leave a dangling spur. */
+export function mergeRoomInto(graph: LayoutGraph, roomId: string, targetRoomId: string): LayoutGraph {
+  const regions = faces(graph)
+  const source = regions.find(face => face.room_id === roomId), target = regions.find(face => face.room_id === targetRoomId)
+  if (!source || !target || roomId === targetRoomId) throw new Error('Choose two distinct adjacent rooms to merge.')
+  const sourceEdges = faceEdges(source), targetEdges = faceEdges(target)
+  const shared = new Set([...sourceEdges].filter(edge => targetEdges.has(edge)))
+  if (!shared.size) throw new Error('These rooms do not share a partition.')
+  const removed = graph.walls.filter(wall => shared.has([wall.a, wall.b].sort().join(':')))
+  if (removed.length !== shared.size || removed.some(wall => wall.kind === 'exterior')) throw new Error('Only exact interior shared walls can be removed.')
+  const removedIds = new Set(removed.map(wall => wall.id))
+  const walls = graph.walls.filter(wall => !removedIds.has(wall.id))
+  const used = new Set(walls.flatMap(wall => [wall.a, wall.b]))
+  const next = { ...graph, walls, vertices: graph.vertices.filter(vertex => used.has(vertex.id)),
+    rooms: graph.rooms.filter(seed => seed.room_id !== roomId),
+    openings: graph.openings.filter(opening => !removedIds.has(opening.wall_id)) }
+  const problem = validateGraph(next)
+  if (problem || faces(next).length !== regions.length - 1) throw new Error(problem || 'The merge would change another room; keep its walls and review the partitions.')
+  return next
+}
 export function validateGraph(graph: LayoutGraph): string | null {
   const building = footprint(graph)
   const boundaryError = validateBoundary(building, graph.property_boundary)
