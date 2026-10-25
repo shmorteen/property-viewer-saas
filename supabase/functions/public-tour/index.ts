@@ -30,11 +30,12 @@ Deno.serve(async req => {
       admin.from('property_boundaries').select('points').eq('property_id', property.id).maybeSingle(),
     ])
     const roomIds = (rooms || []).map(room => room.id)
-    const [{ data: media }, { data: polygons }, { data: openings }, { data: stairs }] = await Promise.all([
+    const [{ data: media }, { data: polygons }, { data: openings }, { data: stairs }, { data: interiorSettings }] = await Promise.all([
       roomIds.length ? admin.from('room_media').select('*').in('room_id', roomIds).order('sort_order') : Promise.resolve({ data: [] }),
       roomIds.length ? admin.from('room_polygons').select('*').in('room_id', roomIds) : Promise.resolve({ data: [] }),
       roomIds.length ? admin.from('openings').select('*').in('space_id', roomIds) : Promise.resolve({ data: [] }),
       roomIds.length ? admin.from('stair_connections').select('*').in('space_id', roomIds) : Promise.resolve({ data: [] }),
+      roomIds.length ? admin.from('room_interior_settings').select('room_id,preset,floor_material_id,wall_material_id,removed_asset_ids').in('room_id', roomIds) : Promise.resolve({ data: [] }),
     ])
     const [resolvedFloors, logoUrl, resolvedMedia, resolvedModel] = await Promise.all([
       Promise.all((floors || []).map(async floor => ({ ...floor, url: await resolve(admin, 'floor-plans', floor.storage_path) }))),
@@ -55,6 +56,7 @@ Deno.serve(async req => {
       openings: openings || [],
       layout_graphs: (layoutGraphs || []).map(item => ({ level_id: item.level_id, graph: { ...item.graph, property_boundary: propertyBoundary?.points || [] } })),
       stairs: stairs || [],
+      interior_settings: interiorSettings || [],
       model: resolvedModel,
       tour,
     })

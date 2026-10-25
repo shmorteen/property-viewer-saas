@@ -2,13 +2,13 @@ import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowDown, ArrowLeft, ArrowUp, Check, Copy, ImagePlus, Plus, Redo2, Trash2, Undo2, UploadCloud, X } from 'lucide-react'
 import { useApp } from '../context'
-import { addLevel, addMedia, addRoom, applyTemplate, deleteLevel, deleteMedia, deleteOpening, deletePolygon, deleteRoom, duplicateRoom, ensureDefaultLevel, getProperty, getLayoutGraph, saveLayoutGraph, listFloorPlans, listLevelPolygons, listLevels, listMedia, listOpenings, listRooms, listStairs, removeObject, saveFloorPlan, saveOpening, savePolygon, saveStair, signedUrl, updateLevel, updateSpace, upload } from '../lib/data'
+import { addLevel, addMedia, addRoom, applyTemplate, deleteLevel, deleteMedia, deleteOpening, deletePolygon, deleteRoom, duplicateRoom, ensureDefaultLevel, getProperty, getLayoutGraph, saveLayoutGraph, listFloorPlans, listLevelPolygons, listLevels, listMedia, listOpenings, listRoomInteriorSettings, listRooms, listStairs, removeObject, saveFloorPlan, saveOpening, savePolygon, saveRoomInteriorSetting, saveStair, signedUrl, updateLevel, updateSpace, upload } from '../lib/data'
 import { clamp, overlapsAnother, snapPoint, validLayoutPolygon } from '../lib/geometry'
 import { candidateFromLegacy } from '../lib/topology'
 import { isLowResolutionPhoto } from '../lib/image-quality'
 import { errorMessage } from '../lib/supabase'
 import { layoutTemplates } from '../lib/templates'
-import type { FloorPlan, Level, LevelType, Opening, OpeningType, Point, Property, Room, RoomMedia, RoomPolygon, SpaceCategory, SpaceType, StairConnection, StairType } from '../lib/types'
+import type { FloorPlan, Level, LevelType, Opening, OpeningType, Point, Property, Room, RoomInteriorSetting, RoomMedia, RoomPolygon, SpaceCategory, SpaceType, StairConnection, StairType } from '../lib/types'
 import { FloorPlanCanvas } from '../components/FloorPlanCanvas'
 import { TopologyComposer } from '../components/TopologyComposer'
 import { PlanAnalysisPanel } from '../components/PlanAnalysisPanel'
@@ -26,6 +26,12 @@ const outdoorTools: { type: SpaceType; label: string }[] = [
 const openingTools: { type: OpeningType; label: string }[] = [
   { type: 'standard_door', label: 'Door' }, { type: 'double_door', label: 'Double door' }, { type: 'standard_window', label: 'Window' }, { type: 'wide_window', label: 'Wide window' },
 ]
+const floorMaterials = [['', 'Room default'], ['light_oak', 'Light oak'], ['dark_wood', 'Dark walnut'], ['neutral_tile', 'Neutral tile'], ['marble', 'Marble'], ['concrete', 'Concrete']]
+const wallMaterials = [['', 'Room default'], ['neutral_paint', 'Soft white paint'], ['warm_paint', 'Warm paint'], ['marble_accent', 'Marble accent'], ['wall_tile', 'Wall tile'], ['wood_panel', 'Wood panel']]
+const furnitureByRoom: Record<string, string[]> = {
+  living_room: ['sofa', 'coffee_table', 'tv_stand', 'armchair'], bedroom: ['bed', 'bedside', 'wardrobe'],
+  dining_room: ['dining_table', 'dining_chair'], office: ['desk', 'office_chair'],
+}
 const levelDefaults: Record<LevelType, { name: string; elevation: number }> = {
   site: { name: 'Site / Outdoor', elevation: 0 }, ground: { name: 'Ground Floor', elevation: 0 }, upper: { name: 'First Floor', elevation: 2.7 },
   basement: { name: 'Basement', elevation: -2.7 }, roof_terrace: { name: 'Roof Terrace', elevation: 8.1 }, custom: { name: 'New Level', elevation: 0 },
@@ -48,6 +54,7 @@ export function EditorPage() {
   const [polygons, setPolygons] = useState<RoomPolygon[]>([])
   const [openings, setOpenings] = useState<Opening[]>([])
   const [stairs, setStairs] = useState<StairConnection[]>([])
+  const [interiorSettings, setInteriorSettings] = useState<RoomInteriorSetting[]>([])
   const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null)
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
   const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(null)
@@ -74,12 +81,12 @@ export function EditorPage() {
     if (!id) return
     const [nextProperty, existingLevels, nextFloors, nextRooms] = await Promise.all([getProperty(id), listLevels(id), listFloorPlans(id), listRooms(id)])
     const nextLevels = existingLevels.length ? existingLevels : [await ensureDefaultLevel(id)]
-    const [nextMedia, nextPolygons, nextOpenings, nextStairs, urls] = await Promise.all([
-      listMedia(nextRooms.map(room => room.id)), listLevelPolygons(nextLevels.map(level => level.id)), listOpenings(nextRooms.map(room => room.id)), listStairs(nextRooms.map(room => room.id)),
+    const [nextMedia, nextPolygons, nextOpenings, nextStairs, nextInteriors, urls] = await Promise.all([
+      listMedia(nextRooms.map(room => room.id)), listLevelPolygons(nextLevels.map(level => level.id)), listOpenings(nextRooms.map(room => room.id)), listStairs(nextRooms.map(room => room.id)), listRoomInteriorSettings(nextRooms.map(room => room.id)),
       Promise.all(nextFloors.map(async floor => [floor.level_id, await signedUrl('floor-plans', floor.storage_path)] as const)),
     ])
     const signedMedia = await Promise.all(nextMedia.map(async item => ({ ...item, url: await signedUrl('room-photos', item.storage_path) })))
-    setProperty(nextProperty); setLevels(nextLevels); setFloors(nextFloors); setRooms(nextRooms); setMedia(signedMedia); setPolygons(nextPolygons); setOpenings(nextOpenings); setStairs(nextStairs); setFloorUrls(Object.fromEntries(urls))
+    setProperty(nextProperty); setLevels(nextLevels); setFloors(nextFloors); setRooms(nextRooms); setMedia(signedMedia); setPolygons(nextPolygons); setOpenings(nextOpenings); setStairs(nextStairs); setInteriorSettings(nextInteriors); setFloorUrls(Object.fromEntries(urls))
     setSelectedLevelId(current => current && nextLevels.some(level => level.id === current) ? current : nextLevels[0].id)
     setSelectedRoomId(current => current && nextRooms.some(room => room.id === current) ? current : null)
   }, [id])
@@ -92,6 +99,8 @@ export function EditorPage() {
   const levelOpenings = openings.filter(opening => levelRooms.some(room => room.id === opening.space_id))
   const floor = floors.find(item => item.level_id === activeLevel?.id)
   const activeRoom = levelRooms.find(room => room.id === selectedRoomId)
+  const interior = interiorSettings.find(item => item.room_id === activeRoom?.id) || (activeRoom ? { room_id: activeRoom.id, preset: 'standard' as const, floor_material_id: null, wall_material_id: null, removed_asset_ids: [] } : null)
+  const changeInterior = (patch: Partial<RoomInteriorSetting>) => { if (interior) void run(() => saveRoomInteriorSetting({ ...interior, ...patch }), 'Interior presentation updated. Open the 3D preview to see it.') }
   const selectedPolygon = levelPolygons.find(poly => poly.id === selectedPolygonId)
   const selectedOpening = levelOpenings.find(opening => opening.id === selectedOpeningId)
   const stair = stairs.find(item => item.space_id === activeRoom?.id)
@@ -200,6 +209,14 @@ export function EditorPage() {
           <div className="mt-5 border-t border-line pt-4"><h3 className="font-bold">Photos</h3><label className="mt-3 flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line px-3 text-sm font-semibold text-pine hover:bg-mint"><ImagePlus size={18}/>Upload photos<input aria-label={`Upload photos for ${activeRoom.name}`} type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" onChange={onPhotos} disabled={busy}/></label><p className="mt-2 text-xs text-slate-500">Use original photos, ideally at least 1600 × 1200 px.</p><div className="mt-3 grid grid-cols-2 gap-2">{media.filter(item => item.room_id === activeRoom.id).map(item => <RoomPhotoTile key={item.id} item={item} roomName={activeRoom.name} busy={busy} onDelete={() => void run(async () => { await deleteMedia(item.id); await removeObject('room-photos', item.storage_path) }, 'Photo deleted.')} />)}</div></div>
           </Card>}
           {selectedOpening && <Card><h2 className="font-extrabold">Selected opening</h2><p className="mt-1 text-sm capitalize text-slate-500">{selectedOpening.opening_type.replaceAll('_',' ')}</p><Field label="Width (m)"><Input key={`${selectedOpening.id}-width`} className="mt-2" type="number" min="0.4" max="4" step="0.1" defaultValue={selectedOpening.width} onBlur={e => { const value = Number(e.target.value); if (Number.isFinite(value) && value !== Number(selectedOpening.width)) void run(() => saveOpening({ ...selectedOpening, width: value }).then(() => {}), 'Opening width updated.') }}/></Field><p className="mt-2 text-xs text-slate-500">Drag the marker along its wall to change position.</p><Button size="sm" variant="danger" className="mt-3" disabled={busy} onClick={() => { if (window.confirm('Delete this opening?')) void run(async () => { await deleteOpening(selectedOpening.id); setSelectedOpeningId(null) }, 'Opening deleted.') }}><Trash2 size={15}/>Delete opening</Button></Card>}
+          {activeRoom?.category === 'indoor' && interior && <Card><h2 className="font-extrabold">Interior presentation · {activeRoom.name}</h2><p className="mt-1 text-xs text-slate-500">Changes appear in the 3D tour without changing room geometry.</p>
+            <div className="mt-3 space-y-3">
+              <Field label="Interior preset"><select className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm" value={interior.preset} disabled={busy} onChange={e => changeInterior({ preset: e.target.value as RoomInteriorSetting['preset'] })}><option value="standard">Standard furnished</option><option value="unfurnished">Unfurnished</option></select></Field>
+              <Field label="Floor material"><select className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm" value={interior.floor_material_id || ''} disabled={busy} onChange={e => changeInterior({ floor_material_id: e.target.value || null })}>{floorMaterials.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+              <Field label="Wall material"><select className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm" value={interior.wall_material_id || ''} disabled={busy} onChange={e => changeInterior({ wall_material_id: e.target.value || null })}>{wallMaterials.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+              {furnitureByRoom[activeRoom.space_type]?.length > 0 && <div><p className="text-xs font-semibold">Furniture</p><div className="mt-2 flex flex-wrap gap-2">{furnitureByRoom[activeRoom.space_type].map(assetId => <button key={assetId} type="button" disabled={busy} onClick={() => changeInterior({ removed_asset_ids: interior.removed_asset_ids.includes(assetId) ? interior.removed_asset_ids.filter(id => id !== assetId) : [...interior.removed_asset_ids, assetId] })} className="rounded-lg border border-line px-2 py-1 text-xs hover:bg-mint">{interior.removed_asset_ids.includes(assetId) ? 'Restore' : 'Remove'} {assetId.replaceAll('_', ' ')}</button>)}</div></div>}
+              <Button size="sm" variant="outline" disabled={busy || !interior.removed_asset_ids.length} onClick={() => changeInterior({ removed_asset_ids: [] })}>Regenerate default furniture</Button>
+            </div></Card>}
         </div>
       </div>}
     </div>}

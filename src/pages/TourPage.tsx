@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Bath, BedDouble, Building2, ChevronLeft, ChevronRight, MapPin } from 'lucide-react'
 import { FloorPlanCanvas } from '../components/FloorPlanCanvas'
 import { Button, Notice, Spinner } from '../components/ui'
-import { getLayoutGraph, getProperty, getPublicTour, getSignedModel, getTour, listFloorPlans, listLevelPolygons, listLevels, listMedia, listOpenings, listRooms, listStairs, signedUrl } from '../lib/data'
+import { getLayoutGraph, getProperty, getPublicTour, getSignedModel, getTour, listFloorPlans, listLevelPolygons, listLevels, listMedia, listOpenings, listRoomInteriorSettings, listRooms, listStairs, signedUrl } from '../lib/data'
 import { errorMessage } from '../lib/supabase'
 import type { Level, ModelScene, TourPayload } from '../lib/types'
 import { useApp } from '../context'
@@ -16,8 +16,8 @@ async function privatePayload(id: string, organization: NonNullable<ReturnType<t
     getProperty(id), listLevels(id), listFloorPlans(id), listRooms(id), getTour(id), getSignedModel(id),
   ])
   const roomIds = rooms.map(room => room.id)
-  const [rawMedia, polygons, openings, stairs, resolvedFloors, logoUrl] = await Promise.all([
-    listMedia(roomIds), listLevelPolygons(levels.map(level => level.id)), listOpenings(roomIds), listStairs(roomIds),
+  const [rawMedia, polygons, openings, stairs, interior_settings, resolvedFloors, logoUrl] = await Promise.all([
+    listMedia(roomIds), listLevelPolygons(levels.map(level => level.id)), listOpenings(roomIds), listStairs(roomIds), listRoomInteriorSettings(roomIds),
     Promise.all(floors.map(async floor => ({ ...floor, url: await signedUrl('floor-plans', floor.storage_path) }))),
     organization.logo_path ? signedUrl('organization-branding', organization.logo_path) : Promise.resolve(''),
   ])
@@ -27,7 +27,7 @@ async function privatePayload(id: string, organization: NonNullable<ReturnType<t
     property, organization: { ...organization, logo_url: logoUrl }, levels, floor_plans: resolvedFloors,
     floor_plan: resolvedFloors.find(floor => floor.level_id === levels[0]?.id) || resolvedFloors[0] || null,
     rooms: rooms.map(room => ({ ...room, media: media.filter(item => item.room_id === room.id) })),
-    polygons, openings, layout_graphs, stairs, model,
+    polygons, openings, layout_graphs, stairs, interior_settings, model,
     tour: tour || { id: '', property_id: id, slug: '', published: false, published_at: null, created_at: '' },
   }
 }
@@ -64,7 +64,7 @@ export function TourPage({ preview = false }: { preview?: boolean }) {
     fetch(payload.model.scene_url, { signal: controller.signal })
       .then(response => { if (!response.ok) throw new Error('Could not download 3D scene'); return response.json() })
       .then((scene: ModelScene) => {
-        if (scene.property_id !== payload.property.id || ![1, 2].includes(scene.schema_version)) throw new Error('Invalid 3D scene')
+        if (scene.property_id !== payload.property.id || ![1, 2, 3].includes(scene.schema_version)) throw new Error('Invalid 3D scene')
         setModelScene(scene)
       })
       .catch(e => { if (e.name !== 'AbortError') setModelError(errorMessage(e)) })
@@ -126,7 +126,7 @@ export function TourPage({ preview = false }: { preview?: boolean }) {
           <div className="min-w-0">
             {mode === '3d' && payload.model?.glb_url ? modelError ? <Notice>{modelError}</Notice> :
               modelScene ? <Suspense fallback={<div className="grid h-[420px] place-items-center"><Spinner/></div>}>
-                <Property3DViewer url={payload.model.glb_url} scene={modelScene} activeRoomId={activeRoom?.id || null}
+                <Property3DViewer url={payload.model.glb_url} scene={modelScene} settings={payload.interior_settings} activeRoomId={activeRoom?.id || null}
                   activeLevelId={activeLevel?.id || null} onSelectRoom={selectRoom} onFallback={() => setMode('floor')}/>
               </Suspense> : <div className="grid h-[420px] place-items-center"><Spinner/></div> : null}
             {mode === 'floor' && <div className="rounded-2xl border border-line bg-white p-5">

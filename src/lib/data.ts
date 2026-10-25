@@ -64,6 +64,15 @@ export async function listFloorPlans(propertyId: string): Promise<FloorPlan[]> {
 export async function getFloorPlan(propertyId: string): Promise<FloorPlan | null> { const { data, error } = await supabase.from('floor_plans').select('*').eq('property_id', propertyId).order('created_at').limit(1).maybeSingle(); if (error) throw error; return data as FloorPlan | null }
 export async function saveFloorPlan(propertyId: string, levelId: string, path: string, width: number, height: number): Promise<FloorPlan> { const { data, error } = await supabase.from('floor_plans').upsert({ property_id: propertyId, level_id: levelId, storage_path: path, width, height }, { onConflict: 'level_id' }).select('*').single(); return checked(data, error) as FloorPlan }
 export async function listRooms(propertyId: string): Promise<Room[]> { const { data, error } = await supabase.from('rooms').select('*').eq('property_id', propertyId).order('sort_order'); return checked(data, error) as Room[] }
+export async function listRoomInteriorSettings(roomIds: string[]): Promise<import('./types').RoomInteriorSetting[]> {
+  if (!roomIds.length) return []
+  const { data, error } = await supabase.from('room_interior_settings').select('room_id,preset,floor_material_id,wall_material_id,removed_asset_ids').in('room_id', roomIds)
+  return checked(data, error) as import('./types').RoomInteriorSetting[]
+}
+export async function saveRoomInteriorSetting(setting: import('./types').RoomInteriorSetting): Promise<void> {
+  const { error } = await supabase.from('room_interior_settings').upsert(setting, { onConflict: 'room_id' })
+  if (error) throw error
+}
 export async function addRoom(value: Pick<Room, 'property_id' | 'level_id' | 'name' | 'sort_order' | 'space_type' | 'category' | 'height'>): Promise<Room> { const { data, error } = await supabase.from('rooms').insert(value).select('*').single(); return checked(data, error) as Room }
 export async function restoreRoom(room: Room): Promise<void> { const { error } = await supabase.from('rooms').insert({ id: room.id, property_id: room.property_id, level_id: room.level_id, name: room.name, description: room.description, sort_order: room.sort_order, space_type: room.space_type, category: room.category, height: room.height }); if (error) throw error }
 export async function duplicateRoom(room: Room): Promise<Room> { return addRoom({ property_id: room.property_id, level_id: room.level_id, name: `${room.name} copy`.slice(0, 80), sort_order: room.sort_order + 1, space_type: room.space_type, category: room.category, height: room.height }) }

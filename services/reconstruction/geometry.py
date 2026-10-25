@@ -13,9 +13,11 @@ from typing import Any
 
 import numpy as np
 import trimesh
+from trimesh.visual.texture import TextureVisuals
 from shapely.geometry import Polygon, Point
 from shapely.ops import triangulate, unary_union
 from shapely.geometry import LineString
+from interiors import build_interior_layer
 
 
 def _world_point(point: dict, width: float, depth: float) -> tuple[float, float]:
@@ -122,7 +124,11 @@ def _add_wall(scene: trimesh.Scene, start: tuple[float, float], end: tuple[float
         start_left, start_right = section(left)
         end_left, end_right = section(right)
         panel = _panel_mesh(start_left, start_right, end_left, end_right, elevation + bottom, elevation + top)
-        panel.visual.vertex_colors = np.tile([230, 235, 230, 255], (len(panel.vertices), 1))
+        # Metre-space UVs stay continuous across panels split by openings.
+        uv = np.column_stack(((panel.vertices[:, 0] - start[0]) * direction[0] +
+                              (panel.vertices[:, 2] - start[1]) * direction[1],
+                              panel.vertices[:, 1] - elevation))
+        panel.visual = TextureVisuals(uv=uv)
         scene.add_geometry(panel, node_name=f"{name}_{index}", geom_name=f"{name}_{index}")
 
 
@@ -292,7 +298,8 @@ def _add_stair_geometry(scene: trimesh.Scene, stair: dict, levels: dict[str, dic
 
 def build_model(property_row: dict, levels: list[dict], rooms: list[dict],
                 polygons: list[dict], media: list[dict], layout_graphs: list[dict] | None = None,
-                stair_connections: list[dict] | None = None) -> tuple[bytes, bytes]:
+                stair_connections: list[dict] | None = None,
+                interior_settings: list[dict] | None = None) -> tuple[bytes, bytes]:
     width = float(property_row.get("layout_width_m") or 12)
     if not 2 <= width <= 100:
         raise ValueError("Building width must be between 2 and 100 metres")
@@ -343,7 +350,7 @@ def build_model(property_row: dict, levels: list[dict], rooms: list[dict],
         if faces:
             floor_mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
             floor_color = [140, 187, 175, 255] if room.get("category") == "outdoor" else [229, 222, 207, 255]
-            floor_mesh.visual.vertex_colors = np.tile(floor_color, (len(floor_mesh.vertices), 1))
+            floor_mesh.visual = TextureVisuals(uv=floor_mesh.vertices[:, [0, 2]].copy())
             scene.add_geometry(floor_mesh, node_name=f"room_{room['id']}", geom_name=f"room_{room['id']}")
         center = shape.representative_point()  # Always inside concave rooms.
         photos = sorted(media_by_room.get(room["id"], []), key=lambda item: item.get("sort_order", 0))
@@ -426,12 +433,19 @@ def build_model(property_row: dict, levels: list[dict], rooms: list[dict],
             site_edges.append({'id': f"{room['id']}_{index}", 'room_id': room['id'], 'level_id': room['level_id'],
                                'segment_index': index, 'behavior': behavior, 'height': edge_height,
                                'thickness': edge_thickness})
+    # Interior content is a separate manifest layer, not additional shell mesh.
+    stair_exclusions = [dict(item, footprint_world=[_world_point(p, width, width *
+        float(level_by_id[item['source_level_id']]['canvas_height']) /
+        float(level_by_id[item['source_level_id']]['canvas_width'])) for p in item['footprint']])
+        for item in stair_records]
+    interiors = build_interior_layer(room_records, wall_records, stair_exclusions, interior_settings)
     manifest = {
-        "schema_version": 2, "property_id": property_row["id"], "units": "metres",
+        "schema_version": 3, "property_id": property_row["id"], "units": "metres",
         "layout_width_m": width,
         "levels": [{"id": level["id"], "name": level["name"], "elevation": float(level["elevation"])}
                    for level in levels],
         "rooms": room_records, "walls": wall_records, "site_edges": site_edges, "stairs": stair_records, "stairs_needing_review": stair_review,
+        **interiors,
     }
     glb = scene.export(file_type="glb")
     if not isinstance(glb, bytes) or len(glb) < 100:

@@ -68,7 +68,9 @@ def process_job(db: Client, job: dict) -> None:
             photo["width"], photo["height"] = image_size(data)
         except Exception as exc:
             logger.warning("Could not inspect photo %s: %s", photo["id"], exc)
-    glb, manifest = build_model(property_row, levels, rooms, polygons, photos, layout_graphs, stair_connections)
+    room_ids = [room['id'] for room in rooms]
+    settings = db.table('room_interior_settings').select('*').in_('room_id', room_ids).execute().data if room_ids else []
+    glb, manifest = build_model(property_row, levels, rooms, polygons, photos, layout_graphs, stair_connections, settings)
     progress(70)
     existing = db.table("property_models").select("version").eq("property_id", property_id).order("version", desc=True).limit(1).execute().data or []
     version = (existing[0]["version"] if existing else 0) + 1

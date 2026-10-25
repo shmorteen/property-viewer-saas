@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "validate:interiors": "node scripts/validate-interior-assets.mjs",
     "check:setup": "node scripts/check-setup.mjs",
     "preview": "vite preview"
   },
@@ -42,6 +43,7 @@
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
+    "gltf-validator": "^2.0.0-dev.3.10",
     "postcss": "^8.4.49",
     "supabase": "^2.119.0",
     "tailwindcss": "^3.4.17",
