@@ -6,7 +6,15 @@ import validator from 'gltf-validator'
 const base = 'public/interiors'
 const scene = JSON.parse(await readFile(join(base, 'reference/scene.json'), 'utf8'))
 assert.equal(scene.schema_version, 3)
-assert.equal(scene.interior_library_version, 1)
+assert.equal(scene.interior_library_version, 2)
+const imported = JSON.parse(await readFile('services/reconstruction/assets_manifest.json', 'utf8'))
+for (const asset of imported.assets) {
+  if (asset.status === 'APPROVED') {
+    assert.equal(asset.license, 'CC0-1.0')
+    assert(asset.runtime_sha256 && asset.license_evidence_sha256)
+    assert(scene.furniture_assets.some(item => item.id === asset.id))
+  }
+}
 const ids = new Set()
 for (const asset of scene.furniture_assets) {
   assert(!ids.has(asset.id), `Duplicate asset ${asset.id}`)

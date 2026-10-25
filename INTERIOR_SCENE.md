@@ -1,6 +1,6 @@
 # Interior scene v3
 
-`LayoutGraph` remains the source of walls, rooms, openings, stairs and floors. The reconstruction worker exports the structural `model.glb` with stable metre-space UVs. `scene.json` v3 adds `materials`, `surface_assignments`, `furniture_assets`, `furniture_instances`, `furnishing_diagnostics` and `interior_library_version`. Older v1/v2 scenes retain their original viewer colors.
+`LayoutGraph` remains the source of walls, rooms, openings, stairs and floors. The reconstruction worker exports the structural `model.glb` with stable metre-space UVs. `scene.json` v3 adds `materials`, `surface_assignments`, `furniture_assets`, `furniture_instances`, `furnishing_diagnostics`, `design_diagnostics`, `asset_library_version` and `interior_library_version`. Older v1/v2 scenes retain their original viewer colors.
 
 Floor UVs are world X/Z metres; wall UVs are distance along the wall and height in metres. A material's `repeat` is its physical width and height in metres. The viewer applies reciprocal repeat to color textures, marks them sRGB, and uses metallic-roughness materials. Failed texture requests fall back to solid color. The first release assigns one finish to a whole shared wall; the contract reserves `side` for future side-specific finishes.
 
@@ -12,7 +12,7 @@ Furniture assets live at `/interiors/models/*.glb` and are shared across propert
 
 Run `python services/reconstruction/tools/build_interior_assets.py` with `PYTHONPATH=services/reconstruction`. The script is the editable source for the initial first-party library. An externally authored replacement must use metre units, Y up, floor-centered origin, +Z forward, PBR materials, valid UVs, no cameras/lights, stable node names and a declared bounding box within 5 cm of its GLB bounds. Keep source licenses and authoring files with the asset; do not copy arbitrary Internet models. Compress large future textures before adding them; these first-party 256 px runtime textures total about 318 KB.
 
-Run `npm run validate:interiors` for metadata and official Khronos glTF validation. The current eleven furniture GLBs total 56,284 bytes and have zero validator errors or warnings. The reference shell is 24,824 bytes, has 344 triangles and 32 geometry nodes; all unique furniture assets together have 972 triangles. The fixed reference has twelve furniture instances. Its texture catalog contains seven PNGs and the viewer loads them only in 3D mode. Asset-specific draw calls and FPS depend on the browser and GPU; the development-only `/interior-reference` page displays measured FPS, calls and rendered triangles.
+Run `npm run validate:interiors` for metadata and official Khronos glTF validation. The catalog now has eleven project originals and twelve approved Sweet Home 3D BlendSwap CC0 conversions. The imported GLBs total 4,464,296 bytes. The reference shell is 24,824 bytes, has 344 triangles and 32 geometry nodes. The fixed reference has twelve furniture instances. Its texture catalog contains seven PNGs and the viewer loads them only in 3D mode. Asset-specific draw calls and FPS depend on the browser and GPU; the development-only `/interior-reference` page displays measured FPS, calls and rendered triangles. See `INTERIOR_ASSET_PIPELINE.md` and `INTERIOR_ASSET_PROVENANCE.md` for the second library version.
 
 ## Reference and tests
 

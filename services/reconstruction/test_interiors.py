@@ -100,7 +100,7 @@ def test_curated_glbs_match_declared_scale_and_pivot():
     base = Path(__file__).resolve().parents[2] / "public" / "interiors" / "models"
     for asset in ASSETS:
         encoded = (base / f"{asset['id']}.glb").read_bytes()
-        assert encoded[:4] == b"glTF" and len(encoded) < 100_000
+        assert encoded[:4] == b"glTF" and len(encoded) < 1_500_000
         model = trimesh.load(io.BytesIO(encoded), file_type="glb", force="scene")
         assert len(model.graph.nodes_geometry) < 40
         assert len(model.bounds) == 2

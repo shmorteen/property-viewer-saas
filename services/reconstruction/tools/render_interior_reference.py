@@ -62,8 +62,9 @@ def render(scene: dict, view: tuple[float, float, float, float], size=(960, 720)
         asset = ASSET_BY_ID[item["asset_id"]]
         footprint = _footprint(asset, item["position"][0], item["position"][2], item["rotation_y"])
         points = [pixel(x, z) for x, z in list(footprint.exterior.coords)[:-1]]
-        draw.polygon(points, fill=COLORS[item["asset_id"]], outline="#343434", width=2)
-        draw.text(pixel(item["position"][0], item["position"][2]), item["asset_id"].replace("_", " "), fill="#ffffff", anchor="mm")
+        role = item.get("role", asset["category"])
+        draw.polygon(points, fill=COLORS.get(role, "#77736d"), outline="#343434", width=2)
+        draw.text(pixel(item["position"][0], item["position"][2]), role.replace("_", " "), fill="#ffffff", anchor="mm")
     return image
 
 

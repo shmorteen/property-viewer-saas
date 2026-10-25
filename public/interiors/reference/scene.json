@@ -413,7 +413,7 @@
   "site_edges": [],
   "stairs": [],
   "stairs_needing_review": [],
-  "interior_library_version": 1,
+  "interior_library_version": 2,
   "materials": [
     {
       "id": "light_oak",
@@ -536,6 +536,8 @@
       "metalness": 0
     }
   ],
+  "asset_library_version": 2,
+  "design_concept": "neutral_contemporary",
   "surface_assignments": [
     {
       "target_type": "room",
@@ -611,7 +613,16 @@
       "clearance": {
         "front_m": 0.85,
         "side_m": 0.12
-      }
+      },
+      "source": "project_original",
+      "license": "CC0-1.0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 1.464,
+      "curation_priority": 0
     },
     {
       "id": "coffee_table",
@@ -631,7 +642,16 @@
       "clearance": {
         "front_m": 0.35,
         "side_m": 0.3
-      }
+      },
+      "source": "project_original",
+      "license": "CC0-1.0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.277,
+      "curation_priority": 0
     },
     {
       "id": "tv_stand",
@@ -651,7 +671,16 @@
       "clearance": {
         "front_m": 0.65,
         "side_m": 0.12
-      }
+      },
+      "source": "project_original",
+      "license": "CC0-1.0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.913,
+      "curation_priority": 0
     },
     {
       "id": "armchair",
@@ -671,7 +700,16 @@
       "clearance": {
         "front_m": 0.55,
         "side_m": 0.12
-      }
+      },
+      "source": "project_original",
+      "license": "CC0-1.0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.512,
+      "curation_priority": 0
     },
     {
       "id": "bed",
@@ -691,7 +729,16 @@
       "clearance": {
         "front_m": 0.65,
         "side_m": 0.4
-      }
+      },
+      "source": "project_original",
+      "license": "CC0-1.0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 3.116,
+      "curation_priority": 0
     },
     {
       "id": "bedside",
@@ -711,7 +758,16 @@
       "clearance": {
         "front_m": 0.35,
         "side_m": 0.2
-      }
+      },
+      "source": "project_original",
+      "license": "CC0-1.0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.105,
+      "curation_priority": 0
     },
     {
       "id": "wardrobe",
@@ -731,7 +787,16 @@
       "clearance": {
         "front_m": 0.7,
         "side_m": 0.12
-      }
+      },
+      "source": "project_original",
+      "license": "CC0-1.0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 1.353,
+      "curation_priority": 0
     },
     {
       "id": "dining_table",
@@ -751,7 +816,16 @@
       "clearance": {
         "front_m": 0.75,
         "side_m": 0.75
-      }
+      },
+      "source": "project_original",
+      "license": "CC0-1.0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.956,
+      "curation_priority": 0
     },
     {
       "id": "dining_chair",
@@ -771,7 +845,16 @@
       "clearance": {
         "front_m": 0.4,
         "side_m": 0.12
-      }
+      },
+      "source": "project_original",
+      "license": "CC0-1.0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.202,
+      "curation_priority": 0
     },
     {
       "id": "desk",
@@ -791,7 +874,16 @@
       "clearance": {
         "front_m": 0.75,
         "side_m": 0.12
-      }
+      },
+      "source": "project_original",
+      "license": "CC0-1.0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.609,
+      "curation_priority": 0
     },
     {
       "id": "office_chair",
@@ -811,13 +903,383 @@
       "clearance": {
         "front_m": 0.4,
         "side_m": 0.12
-      }
+      },
+      "source": "project_original",
+      "license": "CC0-1.0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.33,
+      "curation_priority": 0
+    },
+    {
+      "id": "sh3d_blendswap_office_chair_001",
+      "name": "Armchair",
+      "category": "office_chair",
+      "glb_path": "/interiors/models/sh3d_blendswap_office_chair_001.glb",
+      "width_m": 0.6507,
+      "depth_m": 0.6868,
+      "height_m": 1.1501,
+      "pivot": "floor_center",
+      "forward_axis": "+Z",
+      "placement_type": "floor",
+      "compatible_room_types": [
+        "office"
+      ],
+      "preferred_wall_relation": "centered",
+      "clearance": {
+        "front_m": 0.7,
+        "side_m": 0.15
+      },
+      "source": "sweet_home_3d_blendswap_cc0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.514,
+      "license": "CC0-1.0",
+      "runtime_sha256": "69dfc6de8d9bac184ff9f14bb7eaa496b07dfe1c8a037e298aa554008db670b6",
+      "curation_priority": 10
+    },
+    {
+      "id": "sh3d_blendswap_bed_002",
+      "name": "Bed",
+      "category": "bed",
+      "glb_path": "/interiors/models/sh3d_blendswap_bed_002.glb",
+      "width_m": 1.4074,
+      "depth_m": 2.0797,
+      "height_m": 0.9546,
+      "pivot": "floor_center",
+      "forward_axis": "+Z",
+      "placement_type": "floor",
+      "compatible_room_types": [
+        "bedroom"
+      ],
+      "preferred_wall_relation": "back_to_wall",
+      "clearance": {
+        "front_m": 0.7,
+        "side_m": 0.15
+      },
+      "source": "sweet_home_3d_blendswap_cc0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 2.794,
+      "license": "CC0-1.0",
+      "runtime_sha256": "dd51d4962a2862a4dd8681a5f2d099bc3be866319e4a9bdc9fa80f571cd86b00",
+      "curation_priority": 10
+    },
+    {
+      "id": "sh3d_blendswap_bed_003",
+      "name": "Bed",
+      "category": "bed",
+      "glb_path": "/interiors/models/sh3d_blendswap_bed_003.glb",
+      "width_m": 1.4475,
+      "depth_m": 2.1373,
+      "height_m": 1.077,
+      "pivot": "floor_center",
+      "forward_axis": "+Z",
+      "placement_type": "floor",
+      "compatible_room_types": [
+        "bedroom"
+      ],
+      "preferred_wall_relation": "back_to_wall",
+      "clearance": {
+        "front_m": 0.7,
+        "side_m": 0.15
+      },
+      "source": "sweet_home_3d_blendswap_cc0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 3.332,
+      "license": "CC0-1.0",
+      "runtime_sha256": "5ed936ca6782783f862f85c32159f31c7d46f145bf5fd83bcc32ebdb7aa60cb4",
+      "curation_priority": 10
+    },
+    {
+      "id": "sh3d_blendswap_bedside_004",
+      "name": "Bedside table",
+      "category": "bedside",
+      "glb_path": "/interiors/models/sh3d_blendswap_bedside_004.glb",
+      "width_m": 0.4856,
+      "depth_m": 0.4813,
+      "height_m": 0.4542,
+      "pivot": "floor_center",
+      "forward_axis": "+Z",
+      "placement_type": "floor",
+      "compatible_room_types": [
+        "bedroom"
+      ],
+      "preferred_wall_relation": "centered",
+      "clearance": {
+        "front_m": 0.4,
+        "side_m": 0.15
+      },
+      "source": "sweet_home_3d_blendswap_cc0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.106,
+      "license": "CC0-1.0",
+      "runtime_sha256": "9824f0739d98623dde19fe2f802e80d6ede71aa03dae88373e3ad329ab4ab9ce",
+      "curation_priority": 10
+    },
+    {
+      "id": "sh3d_blendswap_dining_chair_026",
+      "name": "Oak chair",
+      "category": "dining_chair",
+      "glb_path": "/interiors/models/sh3d_blendswap_dining_chair_026.glb",
+      "width_m": 0.4909,
+      "depth_m": 0.6122,
+      "height_m": 1.1781,
+      "pivot": "floor_center",
+      "forward_axis": "+Z",
+      "placement_type": "floor",
+      "compatible_room_types": [
+        "dining_room"
+      ],
+      "preferred_wall_relation": "centered",
+      "clearance": {
+        "front_m": 0.4,
+        "side_m": 0.15
+      },
+      "source": "sweet_home_3d_blendswap_cc0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.354,
+      "license": "CC0-1.0",
+      "runtime_sha256": "d0c23e78888f5672c256b42f22a4eb1e7276470af5222269d32e1905ca5cab62",
+      "curation_priority": 10
+    },
+    {
+      "id": "sh3d_blendswap_dining_table_027",
+      "name": "Oak table",
+      "category": "dining_table",
+      "glb_path": "/interiors/models/sh3d_blendswap_dining_table_027.glb",
+      "width_m": 1.24,
+      "depth_m": 1.24,
+      "height_m": 0.7413,
+      "pivot": "floor_center",
+      "forward_axis": "+Z",
+      "placement_type": "floor",
+      "compatible_room_types": [
+        "dining_room"
+      ],
+      "preferred_wall_relation": "centered",
+      "clearance": {
+        "front_m": 0.7,
+        "side_m": 0.15
+      },
+      "source": "sweet_home_3d_blendswap_cc0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 1.14,
+      "license": "CC0-1.0",
+      "runtime_sha256": "5d1b5b27de9fd41ecf601e253324f0e0c11e5212f00aeaf366a0349c1b827df6",
+      "curation_priority": 10
+    },
+    {
+      "id": "sh3d_blendswap_tv_stand_052",
+      "name": "Television cabinet",
+      "category": "tv_stand",
+      "glb_path": "/interiors/models/sh3d_blendswap_tv_stand_052.glb",
+      "width_m": 1.3537,
+      "depth_m": 0.6928,
+      "height_m": 1.6002,
+      "pivot": "floor_center",
+      "forward_axis": "+Z",
+      "placement_type": "floor",
+      "compatible_room_types": [
+        "living_room"
+      ],
+      "preferred_wall_relation": "back_to_wall",
+      "clearance": {
+        "front_m": 0.7,
+        "side_m": 0.15
+      },
+      "source": "sweet_home_3d_blendswap_cc0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 1.501,
+      "license": "CC0-1.0",
+      "runtime_sha256": "2392d7755ea6aeaba992ac5c25dc018385f9feebc07e50d097ec1cf6dc07e914",
+      "curation_priority": 10
+    },
+    {
+      "id": "sh3d_blendswap_desk_075",
+      "name": "Desk",
+      "category": "desk",
+      "glb_path": "/interiors/models/sh3d_blendswap_desk_075.glb",
+      "width_m": 1.3935,
+      "depth_m": 0.5428,
+      "height_m": 1.0545,
+      "pivot": "floor_center",
+      "forward_axis": "+Z",
+      "placement_type": "floor",
+      "compatible_room_types": [
+        "office"
+      ],
+      "preferred_wall_relation": "back_to_wall",
+      "clearance": {
+        "front_m": 0.7,
+        "side_m": 0.15
+      },
+      "source": "sweet_home_3d_blendswap_cc0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.798,
+      "license": "CC0-1.0",
+      "runtime_sha256": "f3381df3bdd26aae2f6cbbc2b96d4d79841a60c162f6f2518e4d724daf5064b4",
+      "curation_priority": 10
+    },
+    {
+      "id": "sh3d_blendswap_armchair_086",
+      "name": "Armchair",
+      "category": "armchair",
+      "glb_path": "/interiors/models/sh3d_blendswap_armchair_086.glb",
+      "width_m": 0.953,
+      "depth_m": 0.8331,
+      "height_m": 0.783,
+      "pivot": "floor_center",
+      "forward_axis": "+Z",
+      "placement_type": "floor",
+      "compatible_room_types": [
+        "living_room"
+      ],
+      "preferred_wall_relation": "back_to_wall",
+      "clearance": {
+        "front_m": 0.7,
+        "side_m": 0.15
+      },
+      "source": "sweet_home_3d_blendswap_cc0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.622,
+      "license": "CC0-1.0",
+      "runtime_sha256": "2af382416e2518eb42aea7e87fce994dca9320c690dbd090fc4b626ceda669b4",
+      "curation_priority": 10
+    },
+    {
+      "id": "sh3d_blendswap_sofa_095",
+      "name": "Couch",
+      "category": "sofa",
+      "glb_path": "/interiors/models/sh3d_blendswap_sofa_095.glb",
+      "width_m": 2.0744,
+      "depth_m": 0.8764,
+      "height_m": 0.8559,
+      "pivot": "floor_center",
+      "forward_axis": "+Z",
+      "placement_type": "floor",
+      "compatible_room_types": [
+        "living_room"
+      ],
+      "preferred_wall_relation": "back_to_wall",
+      "clearance": {
+        "front_m": 0.7,
+        "side_m": 0.15
+      },
+      "source": "sweet_home_3d_blendswap_cc0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 1.556,
+      "license": "CC0-1.0",
+      "runtime_sha256": "3a9e87c628de8d7e5502b8d9e82959c302c21fec4030c180723ce7910153171f",
+      "curation_priority": 10
+    },
+    {
+      "id": "sh3d_blendswap_armchair_099",
+      "name": "Armchair",
+      "category": "armchair",
+      "glb_path": "/interiors/models/sh3d_blendswap_armchair_099.glb",
+      "width_m": 0.7732,
+      "depth_m": 0.8493,
+      "height_m": 0.8646,
+      "pivot": "floor_center",
+      "forward_axis": "+Z",
+      "placement_type": "floor",
+      "compatible_room_types": [
+        "living_room"
+      ],
+      "preferred_wall_relation": "back_to_wall",
+      "clearance": {
+        "front_m": 0.7,
+        "side_m": 0.15
+      },
+      "source": "sweet_home_3d_blendswap_cc0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 0.568,
+      "license": "CC0-1.0",
+      "runtime_sha256": "d4b7852449f6b79c8b765beb1d26fdd47155096b0acdc91c0ed45b7beea44a55",
+      "curation_priority": 10
+    },
+    {
+      "id": "sh3d_blendswap_sofa_132",
+      "name": "Sofa",
+      "category": "sofa",
+      "glb_path": "/interiors/models/sh3d_blendswap_sofa_132.glb",
+      "width_m": 1.6691,
+      "depth_m": 0.7471,
+      "height_m": 0.8481,
+      "pivot": "floor_center",
+      "forward_axis": "+Z",
+      "placement_type": "floor",
+      "compatible_room_types": [
+        "living_room"
+      ],
+      "preferred_wall_relation": "back_to_wall",
+      "clearance": {
+        "front_m": 0.7,
+        "side_m": 0.15
+      },
+      "source": "sweet_home_3d_blendswap_cc0",
+      "style_tags": [
+        "neutral_contemporary"
+      ],
+      "material_tags": [],
+      "colour_family": "neutral",
+      "visual_weight": 1.058,
+      "license": "CC0-1.0",
+      "runtime_sha256": "aba571c68909d3db9ce7a5a350c02bba03ac2c2123b8ccb83d6d910314fb3885",
+      "curation_priority": 10
     }
   ],
   "furniture_instances": [
     {
       "id": "fba734eb-39ab-5df1-adf3-132fbb25e73d:sofa:0",
-      "asset_id": "sofa",
+      "asset_id": "sh3d_blendswap_sofa_132",
+      "role": "sofa",
       "room_id": "fba734eb-39ab-5df1-adf3-132fbb25e73d",
       "position": [
         -3.5,
@@ -830,6 +1292,7 @@
     {
       "id": "fba734eb-39ab-5df1-adf3-132fbb25e73d:coffee_table:0",
       "asset_id": "coffee_table",
+      "role": "coffee_table",
       "room_id": "fba734eb-39ab-5df1-adf3-132fbb25e73d",
       "position": [
         -3.5,
@@ -842,6 +1305,7 @@
     {
       "id": "fba734eb-39ab-5df1-adf3-132fbb25e73d:tv_stand:0",
       "asset_id": "tv_stand",
+      "role": "tv_stand",
       "room_id": "fba734eb-39ab-5df1-adf3-132fbb25e73d",
       "position": [
         -4.76,
@@ -853,7 +1317,8 @@
     },
     {
       "id": "fba734eb-39ab-5df1-adf3-132fbb25e73d:armchair:0",
-      "asset_id": "armchair",
+      "asset_id": "sh3d_blendswap_armchair_099",
+      "role": "armchair",
       "room_id": "fba734eb-39ab-5df1-adf3-132fbb25e73d",
       "position": [
         -5.5,
@@ -866,6 +1331,7 @@
     {
       "id": "ddf86351-1549-5162-a547-f1496d41f9b4:bed:0",
       "asset_id": "bed",
+      "role": "bed",
       "room_id": "ddf86351-1549-5162-a547-f1496d41f9b4",
       "position": [
         3.5,
@@ -877,7 +1343,8 @@
     },
     {
       "id": "ddf86351-1549-5162-a547-f1496d41f9b4:bedside:0",
-      "asset_id": "bedside",
+      "asset_id": "sh3d_blendswap_bedside_004",
+      "role": "bedside",
       "room_id": "ddf86351-1549-5162-a547-f1496d41f9b4",
       "position": [
         2.28,
@@ -890,6 +1357,7 @@
     {
       "id": "ddf86351-1549-5162-a547-f1496d41f9b4:wardrobe:0",
       "asset_id": "wardrobe",
+      "role": "wardrobe",
       "room_id": "ddf86351-1549-5162-a547-f1496d41f9b4",
       "position": [
         4.76,
@@ -901,7 +1369,8 @@
     },
     {
       "id": "be75f9d7-afbb-513c-9c0b-a1dfdf0be88a:dining_table:0",
-      "asset_id": "dining_table",
+      "asset_id": "sh3d_blendswap_dining_table_027",
+      "role": "dining_table",
       "room_id": "be75f9d7-afbb-513c-9c0b-a1dfdf0be88a",
       "position": [
         -4.7,
@@ -913,31 +1382,34 @@
     },
     {
       "id": "be75f9d7-afbb-513c-9c0b-a1dfdf0be88a:dining_chair:0",
-      "asset_id": "dining_chair",
+      "asset_id": "sh3d_blendswap_dining_chair_026",
+      "role": "dining_chair",
       "room_id": "be75f9d7-afbb-513c-9c0b-a1dfdf0be88a",
       "position": [
-        -5.35,
+        -4.7,
         0.0,
-        -2.35
+        -2.6061
       ],
       "rotation_y": 0,
       "scale": 1
     },
     {
       "id": "be75f9d7-afbb-513c-9c0b-a1dfdf0be88a:dining_chair:1",
-      "asset_id": "dining_chair",
+      "asset_id": "sh3d_blendswap_dining_chair_026",
+      "role": "dining_chair",
       "room_id": "be75f9d7-afbb-513c-9c0b-a1dfdf0be88a",
       "position": [
-        -4.05,
+        -4.7,
         0.0,
-        -0.65
+        -0.3939
       ],
       "rotation_y": 3.141593,
       "scale": 1
     },
     {
       "id": "50c8ad45-5f10-55c1-81c6-6f93d80ab7de:desk:0",
-      "asset_id": "desk",
+      "asset_id": "sh3d_blendswap_desk_075",
+      "role": "desk",
       "room_id": "50c8ad45-5f10-55c1-81c6-6f93d80ab7de",
       "position": [
         2.24,
@@ -949,7 +1421,8 @@
     },
     {
       "id": "50c8ad45-5f10-55c1-81c6-6f93d80ab7de:office_chair:0",
-      "asset_id": "office_chair",
+      "asset_id": "sh3d_blendswap_office_chair_001",
+      "role": "office_chair",
       "room_id": "50c8ad45-5f10-55c1-81c6-6f93d80ab7de",
       "position": [
         2.24,
@@ -963,63 +1436,181 @@
   "furnishing_diagnostics": [
     {
       "room_id": "fba734eb-39ab-5df1-adf3-132fbb25e73d",
-      "asset_id": "sofa",
-      "reason": "usable wall (-7.0, 5.4) to (0.0, 5.4)"
+      "asset_id": "sh3d_blendswap_sofa_132",
+      "reason": "usable wall (-7.0, 5.4) to (0.0, 5.4)",
+      "rule_origin": "PRODUCT_HEURISTIC"
     },
     {
       "room_id": "fba734eb-39ab-5df1-adf3-132fbb25e73d",
       "asset_id": "coffee_table",
-      "reason": "in front of sofa with walking clearance"
+      "reason": "in front of sofa with walking clearance",
+      "rule_origin": "PRODUCT_HEURISTIC"
     },
     {
       "room_id": "fba734eb-39ab-5df1-adf3-132fbb25e73d",
       "asset_id": "tv_stand",
-      "reason": "usable wall (0.0, 0.0) to (-7.0, 0.0)"
+      "reason": "usable wall (0.0, 0.0) to (-7.0, 0.0)",
+      "rule_origin": "PRODUCT_HEURISTIC"
     },
     {
       "room_id": "fba734eb-39ab-5df1-adf3-132fbb25e73d",
-      "asset_id": "armchair",
-      "reason": "beside sofa"
+      "asset_id": "sh3d_blendswap_armchair_099",
+      "reason": "beside sofa",
+      "rule_origin": "PRODUCT_HEURISTIC"
     },
     {
       "room_id": "ddf86351-1549-5162-a547-f1496d41f9b4",
       "asset_id": "bed",
-      "reason": "usable wall (0.0, 5.4) to (7.0, 5.4)"
+      "reason": "usable wall (0.0, 5.4) to (7.0, 5.4)",
+      "rule_origin": "PRODUCT_HEURISTIC"
     },
     {
       "room_id": "ddf86351-1549-5162-a547-f1496d41f9b4",
-      "asset_id": "bedside",
-      "reason": "beside bed"
+      "asset_id": "sh3d_blendswap_bedside_004",
+      "reason": "beside bed",
+      "rule_origin": "PRODUCT_HEURISTIC"
     },
     {
       "room_id": "ddf86351-1549-5162-a547-f1496d41f9b4",
       "asset_id": "wardrobe",
-      "reason": "usable wall (7.0, 0.0) to (0.0, 0.0)"
+      "reason": "usable wall (7.0, 0.0) to (0.0, 0.0)",
+      "rule_origin": "PRODUCT_HEURISTIC"
     },
     {
       "room_id": "be75f9d7-afbb-513c-9c0b-a1dfdf0be88a",
-      "asset_id": "dining_table",
-      "reason": "usable room center"
+      "asset_id": "sh3d_blendswap_dining_table_027",
+      "reason": "usable room center",
+      "rule_origin": "PRODUCT_HEURISTIC"
     },
     {
       "room_id": "be75f9d7-afbb-513c-9c0b-a1dfdf0be88a",
-      "asset_id": "dining_chair",
-      "reason": "at dining table"
+      "asset_id": "sh3d_blendswap_dining_chair_026",
+      "reason": "at dining table with chair-use space",
+      "rule_origin": "PRODUCT_HEURISTIC"
     },
     {
       "room_id": "be75f9d7-afbb-513c-9c0b-a1dfdf0be88a",
-      "asset_id": "dining_chair",
-      "reason": "at dining table"
+      "asset_id": "sh3d_blendswap_dining_chair_026",
+      "reason": "at dining table with chair-use space",
+      "rule_origin": "PRODUCT_HEURISTIC"
     },
     {
       "room_id": "50c8ad45-5f10-55c1-81c6-6f93d80ab7de",
-      "asset_id": "desk",
-      "reason": "usable wall (0.0, 0.0) to (7.0, 0.0)"
+      "asset_id": "sh3d_blendswap_desk_075",
+      "reason": "usable wall (0.0, 0.0) to (7.0, 0.0)",
+      "rule_origin": "PRODUCT_HEURISTIC"
     },
     {
       "room_id": "50c8ad45-5f10-55c1-81c6-6f93d80ab7de",
-      "asset_id": "office_chair",
-      "reason": "at desk"
+      "asset_id": "sh3d_blendswap_office_chair_001",
+      "reason": "at desk",
+      "rule_origin": "PRODUCT_HEURISTIC"
+    }
+  ],
+  "design_diagnostics": [
+    {
+      "room_id": "fba734eb-39ab-5df1-adf3-132fbb25e73d",
+      "design_concept": "neutral_contemporary",
+      "scores": {
+        "functional_fit": 1.0,
+        "circulation": 1.0,
+        "opening_clearance": 1.0,
+        "negative_space": 1.0,
+        "balance": 0.783,
+        "focal_alignment": 0.965,
+        "concept_fit": 1.0,
+        "material_harmony": 1.0
+      },
+      "furniture_occupancy": 0.084,
+      "rule_origins": {
+        "opening_clearance": "GEOMETRY_INVARIANT",
+        "circulation": "PRODUCT_HEURISTIC",
+        "negative_space": "DESIGN_PRINCIPLE",
+        "material_harmony": "PRODUCT_HEURISTIC"
+      },
+      "reasons": [
+        "usable wall (-7.0, 5.4) to (0.0, 5.4)",
+        "in front of sofa with walking clearance",
+        "usable wall (0.0, 0.0) to (-7.0, 0.0)",
+        "beside sofa"
+      ]
+    },
+    {
+      "room_id": "ddf86351-1549-5162-a547-f1496d41f9b4",
+      "design_concept": "neutral_contemporary",
+      "scores": {
+        "functional_fit": 1.0,
+        "circulation": 1.0,
+        "opening_clearance": 1.0,
+        "negative_space": 1.0,
+        "balance": 0.874,
+        "focal_alignment": 0.5,
+        "concept_fit": 1.0,
+        "material_harmony": 1.0
+      },
+      "furniture_occupancy": 0.11,
+      "rule_origins": {
+        "opening_clearance": "GEOMETRY_INVARIANT",
+        "circulation": "PRODUCT_HEURISTIC",
+        "negative_space": "DESIGN_PRINCIPLE",
+        "material_harmony": "PRODUCT_HEURISTIC"
+      },
+      "reasons": [
+        "usable wall (0.0, 5.4) to (7.0, 5.4)",
+        "beside bed",
+        "usable wall (7.0, 0.0) to (0.0, 0.0)"
+      ]
+    },
+    {
+      "room_id": "be75f9d7-afbb-513c-9c0b-a1dfdf0be88a",
+      "design_concept": "neutral_contemporary",
+      "scores": {
+        "functional_fit": 1.0,
+        "circulation": 1.0,
+        "opening_clearance": 1.0,
+        "negative_space": 0.707,
+        "balance": 0.616,
+        "focal_alignment": 0.5,
+        "concept_fit": 1.0,
+        "material_harmony": 1.0
+      },
+      "furniture_occupancy": 0.057,
+      "rule_origins": {
+        "opening_clearance": "GEOMETRY_INVARIANT",
+        "circulation": "PRODUCT_HEURISTIC",
+        "negative_space": "DESIGN_PRINCIPLE",
+        "material_harmony": "PRODUCT_HEURISTIC"
+      },
+      "reasons": [
+        "usable room center",
+        "at dining table with chair-use space",
+        "at dining table with chair-use space"
+      ]
+    },
+    {
+      "room_id": "50c8ad45-5f10-55c1-81c6-6f93d80ab7de",
+      "design_concept": "neutral_contemporary",
+      "scores": {
+        "functional_fit": 1.0,
+        "circulation": 1.0,
+        "opening_clearance": 1.0,
+        "negative_space": 0.398,
+        "balance": 0.484,
+        "focal_alignment": 0.5,
+        "concept_fit": 1.0,
+        "material_harmony": 1.0
+      },
+      "furniture_occupancy": 0.032,
+      "rule_origins": {
+        "opening_clearance": "GEOMETRY_INVARIANT",
+        "circulation": "PRODUCT_HEURISTIC",
+        "negative_space": "DESIGN_PRINCIPLE",
+        "material_harmony": "PRODUCT_HEURISTIC"
+      },
+      "reasons": [
+        "usable wall (0.0, 0.0) to (7.0, 0.0)",
+        "at desk"
+      ]
     }
   ]
 }

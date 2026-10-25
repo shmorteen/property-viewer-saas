@@ -7,11 +7,13 @@ never altered by this module; unsafe furniture candidates are simply omitted.
 from __future__ import annotations
 
 import math
+import json
+from pathlib import Path
 from shapely.affinity import rotate, translate
 from shapely.geometry import LineString, Point, Polygon, box
 from shapely.ops import unary_union
 
-LIBRARY_VERSION = 1
+LIBRARY_VERSION = 2
 
 MATERIALS = [
     dict(id="light_oak", name="Light oak", category="floor", texture="/interiors/textures/light_oak.png", repeat=[0.18, 1.2], roughness=.72, metalness=0),
@@ -31,7 +33,10 @@ def _asset(id: str, name: str, rooms: list[str], width: float, depth: float, hei
     return dict(id=id, name=name, category=id, glb_path=f"/interiors/models/{id}.glb",
                 width_m=width, depth_m=depth, height_m=height, pivot="floor_center",
                 forward_axis="+Z", placement_type="floor", compatible_room_types=rooms,
-                preferred_wall_relation=relation, clearance={"front_m": front, "side_m": side})
+                preferred_wall_relation=relation, clearance={"front_m": front, "side_m": side},
+                source="project_original", license="CC0-1.0", style_tags=["neutral_contemporary"],
+                material_tags=[], colour_family="neutral", visual_weight=round(width * depth * height, 3),
+                curation_priority=0)
 
 ASSETS = [
     _asset("sofa", "Sofa", ["living_room"], 2.1, .85, .82, "back_to_wall", .85),
@@ -46,6 +51,20 @@ ASSETS = [
     _asset("desk", "Desk", ["office"], 1.25, .65, .75, "back_to_wall", .75),
     _asset("office_chair", "Office chair", ["office"], .58, .58, .98, "at_desk", .4),
 ]
+_manifest_path = Path(__file__).with_name("assets_manifest.json")
+if _manifest_path.exists():
+    for imported in json.loads(_manifest_path.read_text(encoding="utf-8"))["assets"]:
+        if imported["status"] != "APPROVED" or imported["license"] != "CC0-1.0":
+            continue
+        if not imported.get("runtime_sha256") or not imported.get("license_evidence_sha256"):
+            continue
+        ASSETS.append({key: imported[key] for key in (
+            "id", "name", "category", "glb_path", "width_m", "depth_m", "height_m", "pivot",
+            "forward_axis", "placement_type", "compatible_room_types", "preferred_wall_relation", "clearance"
+        )} | {"source": "sweet_home_3d_blendswap_cc0", "style_tags": ["neutral_contemporary"],
+             "material_tags": [], "colour_family": "neutral", "visual_weight": round(imported["width_m"] * imported["depth_m"] * imported["height_m"], 3),
+             "license": imported["license"], "runtime_sha256": imported["runtime_sha256"],
+             "curation_priority": imported.get("curation_priority", 0)})
 ASSET_BY_ID = {item["id"]: item for item in ASSETS}
 
 DEFAULTS = {
@@ -128,28 +147,38 @@ def furnish_room(room: dict, walls: list[dict], stairs: list[dict], preset: str 
     diagnostics = []
     removed = set(removed or [])
 
-    def attempt(asset_id: str, candidates: list[tuple[float, float, float, str]], margin: float = .06) -> dict | None:
-        if asset_id in removed:
-            diagnostics.append({"room_id": room["id"], "asset_id": asset_id, "reason": "removed in editor"})
+    def attempt(role: str, candidates: list[tuple[float, float, float, str]], margin: float = .06) -> dict | None:
+        if role in removed:
+            diagnostics.append({"room_id": room["id"], "asset_id": role, "reason": "removed in editor"})
             return None
-        asset = ASSET_BY_ID[asset_id]
-        for x, z, yaw, reason in candidates:
-            if not all(math.isfinite(v) for v in (x, z, yaw)):
-                continue
-            footprint = _footprint(asset, x, z, yaw)
-            front_zone = _front_zone(asset, x, z, yaw)
-            if not shape.buffer(1e-6).covers(footprint.buffer(margin)) or not shape.buffer(1e-6).covers(front_zone):
-                continue
-            if exclusions.intersects(footprint) or exclusions.intersects(front_zone) or any(footprint.buffer(.08).intersects(other) for other in blocked):
-                continue
-            item = {"id": f"{room['id']}:{asset_id}:{sum(i['asset_id'] == asset_id for i in instances)}",
-                    "asset_id": asset_id, "room_id": room["id"], "position": [round(x, 5), room["center"][1], round(z, 5)],
-                    "rotation_y": round(yaw, 6), "scale": 1}
-            instances.append(item)
-            blocked.append(footprint)
-            diagnostics.append({"room_id": room["id"], "asset_id": asset_id, "reason": reason})
-            return item
-        diagnostics.append({"room_id": room["id"], "asset_id": asset_id, "reason": "no safe footprint and clearance"})
+        # Room function asks for a role; approved assets compete by physical fit.
+        # Curated priority is source-agnostic; physical fit resolves variants.
+        # No candidate is resized to force a fit.
+        options = [a for a in ASSETS if a["category"] == role and kind in a["compatible_room_types"]
+                   and a["id"] not in removed]
+        options.sort(key=lambda a: (-a.get("curation_priority", 0),
+                                    abs(a["width_m"] - ASSET_BY_ID[role]["width_m"]), a["id"]))
+        for asset in options:
+            for x, z, yaw, reason in candidates:
+                if not all(math.isfinite(v) for v in (x, z, yaw)):
+                    continue
+                footprint = _footprint(asset, x, z, yaw)
+                front_zone = _front_zone(asset, x, z, yaw)
+                if not shape.buffer(1e-6).covers(footprint.buffer(margin)) or not shape.buffer(1e-6).covers(front_zone):
+                    continue
+                if exclusions.intersects(footprint) or exclusions.intersects(front_zone) or any(footprint.buffer(.08).intersects(other) for other in blocked):
+                    continue
+                item = {"id": f"{room['id']}:{role}:{sum(i.get('role') == role for i in instances)}",
+                        "asset_id": asset["id"], "role": role, "room_id": room["id"],
+                        "position": [round(x, 5), room["center"][1], round(z, 5)],
+                        "rotation_y": round(yaw, 6), "scale": 1}
+                instances.append(item)
+                blocked.append(footprint)
+                diagnostics.append({"room_id": room["id"], "asset_id": asset["id"],
+                                    "reason": reason, "rule_origin": "PRODUCT_HEURISTIC"})
+                return item
+        diagnostics.append({"room_id": room["id"], "asset_id": role, "reason": "no safe footprint and clearance",
+                            "rule_origin": "GEOMETRY_INVARIANT"})
         return None
 
     edges = _walls(room)
@@ -197,8 +226,11 @@ def furnish_room(room: dict, walls: list[dict], stairs: list[dict], preset: str 
                                                           (1.2, 1.2), (-1.2, 1.2))], .35)
         if table:
             x, _, z = table["position"]
-            attempt("dining_chair", [(x-.65, z-.85, 0, "at dining table")], .08)
-            attempt("dining_chair", [(x+.65, z+.85, math.pi, "at dining table")], .08)
+            table_depth = ASSET_BY_ID[table["asset_id"]]["depth_m"]
+            chair_depth = max(a["depth_m"] for a in ASSETS if a["category"] == "dining_chair")
+            offset = table_depth / 2 + chair_depth / 2 + .18
+            attempt("dining_chair", [(x, z-offset, 0, "at dining table with chair-use space")], .08)
+            attempt("dining_chair", [(x, z+offset, math.pi, "at dining table with chair-use space")], .08)
     elif kind == "office":
         desk = attempt("desk", wall_candidates("desk"))
         if desk:
@@ -214,6 +246,7 @@ def build_interior_layer(rooms: list[dict], walls: list[dict], stairs: list[dict
     assignments = []
     furniture = []
     diagnostics = []
+    design_diagnostics = []
     for room in rooms:
         if room.get("category") != "indoor":
             continue
@@ -233,6 +266,57 @@ def build_interior_layer(rooms: list[dict], walls: list[dict], stairs: list[dict
         placed, reasons = furnish_room(room, walls, stairs)
         furniture.extend(placed)
         diagnostics.extend(reasons)
+        shape = Polygon(room["polygon"])
+        occupancy = sum(_footprint(ASSET_BY_ID[item["asset_id"]], item["position"][0],
+                                   item["position"][2], item["rotation_y"]).area for item in placed)
+        density = occupancy / shape.area if shape.area else 0
+        roles = {item["role"] for item in placed}
+        required = {"living_room": "sofa", "bedroom": "bed", "dining_room": "dining_table",
+                    "office": "desk"}.get(room.get("space_type"))
+        primary = required is None or required in roles
+        preferred = {"living_room": ["coffee_table", "tv_stand", "armchair"],
+                     "bedroom": ["bedside", "wardrobe"],
+                     "dining_room": ["dining_chair"],
+                     "office": ["office_chair"]}.get(room.get("space_type"), [])
+        fit = (0.6 if primary else 0.0) + (0.4 * sum(role in roles for role in preferred) /
+                                             len(preferred) if preferred else .4)
+        center = shape.centroid
+        weight = sum(ASSET_BY_ID[item["asset_id"]]["visual_weight"] for item in placed)
+        centroid_x = sum(item["position"][0] * ASSET_BY_ID[item["asset_id"]]["visual_weight"]
+                         for item in placed) / weight if weight else center.x
+        centroid_z = sum(item["position"][2] * ASSET_BY_ID[item["asset_id"]]["visual_weight"]
+                         for item in placed) / weight if weight else center.y
+        diagonal = math.hypot(shape.bounds[2] - shape.bounds[0], shape.bounds[3] - shape.bounds[1])
+        balance = max(0.0, 1 - math.hypot(centroid_x - center.x, centroid_z - center.y) * 2 / diagonal) if diagonal else 0.0
+        sofa = next((item for item in placed if item["role"] == "sofa"), None)
+        tv = next((item for item in placed if item["role"] == "tv_stand"), None)
+        focal = .5
+        if sofa and tv:
+            direction = (tv["position"][0] - sofa["position"][0],
+                         tv["position"][2] - sofa["position"][2])
+            distance = math.hypot(*direction)
+            focal = max(0.0, (math.sin(sofa["rotation_y"]) * direction[0] +
+                              math.cos(sofa["rotation_y"]) * direction[1]) / distance) if distance else 0.0
+        score = {"functional_fit": round(fit, 3),
+                 "circulation": 1.0 if primary else 0.0,
+                 "opening_clearance": 1.0,
+                 "negative_space": round(max(0.0, min(1.0, density / .08, (.35 - density) / .1)), 3),
+                 "balance": round(balance, 3), "focal_alignment": round(focal, 3),
+                 "concept_fit": round(sum("neutral_contemporary" in
+                                          ASSET_BY_ID[item["asset_id"]].get("style_tags", [])
+                                          for item in placed) / len(placed), 3)
+                 if placed else 0.0,
+                 "material_harmony": 1.0 if floor in ("light_oak", "dark_wood", "neutral_tile") and
+                 wall in ("neutral_paint", "warm_paint", "wall_tile") else 0.7}
+        design_diagnostics.append({"room_id": room["id"], "design_concept": "neutral_contemporary",
+                                   "scores": score, "furniture_occupancy": round(density, 3),
+                                   "rule_origins": {"opening_clearance": "GEOMETRY_INVARIANT",
+                                                    "circulation": "PRODUCT_HEURISTIC",
+                                                    "negative_space": "DESIGN_PRINCIPLE",
+                                                    "material_harmony": "PRODUCT_HEURISTIC"},
+                                   "reasons": [item["reason"] for item in reasons]})
     return {"interior_library_version": LIBRARY_VERSION, "materials": MATERIALS,
+            "asset_library_version": 2, "design_concept": "neutral_contemporary",
             "surface_assignments": assignments, "furniture_assets": ASSETS,
-            "furniture_instances": furniture, "furnishing_diagnostics": diagnostics}
+            "furniture_instances": furniture, "furnishing_diagnostics": diagnostics,
+            "design_diagnostics": design_diagnostics}
